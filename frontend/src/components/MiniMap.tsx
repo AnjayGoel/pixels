@@ -1,7 +1,7 @@
-import { Stage, Layer, Shape, Group } from 'react-konva';
+import { Stage, Layer, Shape, Group, Rect } from 'react-konva';
 import { COLOR_HEX_MAP } from '../constants/colors';
 import { Paper } from '@mui/material';
-import { useRef, useEffect, useCallback, useMemo } from 'react';
+import { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import Konva from 'konva';
 
 interface MiniMapProps {
@@ -26,8 +26,9 @@ export const MiniMap: React.FC<MiniMapProps> = ({
     const layerRef = useRef<Konva.Layer>(null);
     const lastGridRef = useRef<string>('');
     const lastViewportRef = useRef<string>('');
-    const UPDATE_THROTTLE = 100; // Lower frequency updates for mini-map
+    const UPDATE_THROTTLE = 16; // Increase update frequency for smoother dragging
     const lastUpdateTimeRef = useRef<number>(0);
+    const [isDragging, setIsDragging] = useState(false);
 
     // Memoize the grid string representation for change detection
     const gridString = useMemo(() => JSON.stringify(grid), [grid]);
@@ -69,25 +70,6 @@ export const MiniMap: React.FC<MiniMapProps> = ({
                         ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
                     }
                 }
-                
-                // Draw viewport indicator
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(
-                    (viewportBounds.x / GRID_SIZE) * MINI_MAP_SIZE,
-                    (viewportBounds.y / GRID_SIZE) * MINI_MAP_SIZE,
-                    (viewportBounds.width / GRID_SIZE) * MINI_MAP_SIZE,
-                    (viewportBounds.height / GRID_SIZE) * MINI_MAP_SIZE
-                );
-                
-                // Add semi-transparent fill
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-                ctx.fillRect(
-                    (viewportBounds.x / GRID_SIZE) * MINI_MAP_SIZE,
-                    (viewportBounds.y / GRID_SIZE) * MINI_MAP_SIZE,
-                    (viewportBounds.width / GRID_SIZE) * MINI_MAP_SIZE,
-                    (viewportBounds.height / GRID_SIZE) * MINI_MAP_SIZE
-                );
             },
             width: MINI_MAP_SIZE,
             height: MINI_MAP_SIZE,
@@ -97,7 +79,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
         group.add(gridShape);
         layerRef.current.add(group);
         layerRef.current.batchDraw();
-    }, [grid, gridString, viewportBounds, viewportString]);
+    }, [grid, gridString]);
 
     useEffect(() => {
         drawMiniMap();
@@ -121,6 +103,48 @@ export const MiniMap: React.FC<MiniMapProps> = ({
         onViewportChange(x, y);
     }, [onViewportChange]);
 
+    // Handle viewport drag start
+    const handleViewportDragStart = useCallback(() => {
+        setIsDragging(true);
+    }, []);
+
+    // Handle viewport drag
+    const handleViewportDrag = useCallback((e: any) => {
+        if (!isDragging) return;
+        
+        const now = Date.now();
+        if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
+            return;
+        }
+        lastUpdateTimeRef.current = now;
+
+        const viewport = e.target;
+        // Convert the viewport position to grid coordinates
+        const x = viewport.x() / PIXEL_SIZE;
+        const y = viewport.y() / PIXEL_SIZE;
+        
+        // Update the main canvas position immediately
+        onViewportChange(x, y);
+    }, [isDragging, onViewportChange, PIXEL_SIZE]);
+
+    // Handle viewport drag end
+    const handleViewportDragEnd = useCallback((e: any) => {
+        setIsDragging(false);
+        
+        const now = Date.now();
+        if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
+            return;
+        }
+        lastUpdateTimeRef.current = now;
+
+        const viewport = e.target;
+        // Convert the viewport position to grid coordinates
+        const x = viewport.x() / PIXEL_SIZE;
+        const y = viewport.y() / PIXEL_SIZE;
+        
+        onViewportChange(x, y);
+    }, [onViewportChange, PIXEL_SIZE]);
+
     return (
         <Paper className="fixed top-4 right-4 p-2" elevation={3}>
             <Stage
@@ -129,7 +153,29 @@ export const MiniMap: React.FC<MiniMapProps> = ({
                 onClick={handleClick}
             >
                 <Layer ref={layerRef}>
-                    {/* Mini-map is drawn dynamically in the drawMiniMap function */}
+                    {/* Grid is drawn dynamically in the drawMiniMap function */}
+                </Layer>
+                <Layer>
+                    <Rect
+                        x={viewportBounds.x * PIXEL_SIZE}
+                        y={viewportBounds.y * PIXEL_SIZE}
+                        width={viewportBounds.width * PIXEL_SIZE}
+                        height={viewportBounds.height * PIXEL_SIZE}
+                        stroke="#000000"
+                        strokeWidth={1}
+                        fill="rgba(255, 255, 255, 0.1)"
+                        draggable
+                        onDragStart={handleViewportDragStart}
+                        onDrag={handleViewportDrag}
+                        onDragEnd={handleViewportDragEnd}
+                        dragBoundFunc={(pos) => {
+                            // Constrain dragging to the minimap bounds
+                            return {
+                                x: Math.max(0, Math.min(MINI_MAP_SIZE - viewportBounds.width * PIXEL_SIZE, pos.x)),
+                                y: Math.max(0, Math.min(MINI_MAP_SIZE - viewportBounds.height * PIXEL_SIZE, pos.y))
+                            };
+                        }}
+                    />
                 </Layer>
             </Stage>
         </Paper>

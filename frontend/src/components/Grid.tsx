@@ -194,24 +194,31 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
     }, []);
 
     const handleMiniMapViewportChange = useCallback((x: number, y: number) => {
+        // Convert grid coordinates to stage coordinates
         setPosition({
-            x: -x * scale,
-            y: -y * scale,
+            x: -x * PIXEL_SIZE * scale,
+            y: -y * PIXEL_SIZE * scale,
         });
-    }, [scale]);
+    }, [scale, PIXEL_SIZE]);
 
     const getViewportBounds = useCallback(() => {
         if (!stageRef.current) return { x: 0, y: 0, width: GRID_SIZE, height: GRID_SIZE };
         
         const stage = stageRef.current;
-        const viewportWidth = STAGE_SIZE / scale;
-        const viewportHeight = STAGE_SIZE / scale;
+        const viewportWidth = window.innerWidth / scale;
+        const viewportHeight = window.innerHeight / scale;
+        
+        // Calculate the visible area in grid coordinates
+        const visibleX = -position.x / (PIXEL_SIZE * scale);
+        const visibleY = -position.y / (PIXEL_SIZE * scale);
+        const visibleWidth = viewportWidth / (PIXEL_SIZE * scale);
+        const visibleHeight = viewportHeight / (PIXEL_SIZE * scale);
         
         return {
-            x: Math.max(0, -position.x / scale),
-            y: Math.max(0, -position.y / scale),
-            width: Math.min(GRID_SIZE, viewportWidth),
-            height: Math.min(GRID_SIZE, viewportHeight),
+            x: Math.max(0, visibleX),
+            y: Math.max(0, visibleY),
+            width: Math.min(GRID_SIZE - visibleX, visibleWidth),
+            height: Math.min(GRID_SIZE - visibleY, visibleHeight),
         };
     }, [position, scale]);
 
