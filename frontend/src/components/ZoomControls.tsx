@@ -16,7 +16,7 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
     onZoomOut,
     onReset,
 }) => {
-    const zoomPercentage = Math.round(scale * 100);
+    const scaleDisplay = scale < 10 ? scale.toFixed(1) + 'x' : Math.round(scale) + 'x';
 
     return (
         <Paper
@@ -28,7 +28,7 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
             </IconButton>
             
             <Typography variant="body2" className="select-none">
-                {zoomPercentage}%
+                {scaleDisplay}
             </Typography>
             
             <IconButton onClick={onZoomOut} size="small">
