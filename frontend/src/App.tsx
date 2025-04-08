@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import reactLogo from './assets/react.svg'
+import viteLogo from '/vite.svg'
+import './App.css'
 import { Grid } from './components/Grid'
 import { ColorPicker } from './components/ColorPicker'
 import { COLORS } from './constants/colors'
@@ -32,6 +35,39 @@ function App() {
     const interval = setInterval(() => {
       const timeLeft = Math.max(0, 10 - (Date.now() - lastPlacedTime) / 1000)
       setIsDisabled(timeLeft > 0)
+    }, 100)
+
+    return () => clearInterval(interval)
+  }, [lastPlacedTime])
+
+  // Mock WebSocket updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Simulate random pixel updates
+      const x = Math.floor(Math.random() * 100)
+      const y = Math.floor(Math.random() * 100)
+      const color = Object.values(COLORS)[Math.floor(Math.random() * Object.values(COLORS).length)]
+      
+      handleWebSocketMessage({
+        type: 'PIXEL_UPDATE',
+        data: { x, y, color }
+      })
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Countdown timer
+  useEffect(() => {
+    if (!lastPlacedTime) return
+
+    const interval = setInterval(() => {
+      const timeLeft = Math.max(0, 10 - (Date.now() - lastPlacedTime) / 1000)
+      setCountdown(Math.ceil(timeLeft))
+
+      if (timeLeft === 0) {
+        clearInterval(interval)
+      }
     }, 100)
 
     return () => clearInterval(interval)
@@ -71,7 +107,7 @@ function App() {
   }, [lastPlacedTime, handleWebSocketMessage])
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center">
+    <div className="min-h-screen bg-gray-100">
       <Snackbar 
         open={countdown > 0}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
@@ -80,14 +116,12 @@ function App() {
           Wait {countdown}s before placing next pixel
         </Alert>
       </Snackbar>
-      
       <Grid
         grid={memoizedGrid}
         selectedColor={selectedColor}
         onPixelPlace={handlePixelPlace}
         disabled={isDisabled}
       />
-      
       <ColorPicker
         selectedColor={selectedColor}
         onColorSelect={setSelectedColor}
