@@ -8,7 +8,7 @@ import { MiniMap } from './MiniMap';
 
 interface GridProps {
     grid: number[][];
-    selectedColor: number;
+    selectedColor: number | null;
     onPixelPlace: (pixel: Pixel) => void;
     disabled: boolean;
 }
@@ -116,7 +116,7 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
 
     // Throttled click handler
     const handleClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
-        if (disabled) return;
+        if (disabled || selectedColor === null) return;
 
         const now = Date.now();
         if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
@@ -199,6 +199,9 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                 scaleX={scale}
                 scaleY={scale}
                 className={disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+                style={{
+                    cursor: disabled ? 'not-allowed' : selectedColor === null ? 'pointer' : `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><rect width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}"/></svg>') 8 8, auto`
+                }}
                 draggable
                 onDragEnd={handleDragEnd}
                 x={position.x}

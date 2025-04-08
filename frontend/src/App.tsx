@@ -15,7 +15,7 @@ function App() {
   
   // Use state only for triggering re-renders
   const [gridVersion, setGridVersion] = useState(0)
-  const [selectedColor, setSelectedColor] = useState<number>(COLORS.BLACK)
+  const [selectedColor, setSelectedColor] = useState<number | null>(COLORS.BLACK)
   const [lastPlacedTime, setLastPlacedTime] = useState<number | null>(null)
   const [countdown, setCountdown] = useState<number>(0)
   const [isDisabled, setIsDisabled] = useState(false)
@@ -33,7 +33,7 @@ function App() {
     }
 
     const interval = setInterval(() => {
-      const timeLeft = Math.max(0, 10 - (Date.now() - lastPlacedTime) / 1000)
+      const timeLeft = Math.max(0, 3 - (Date.now() - lastPlacedTime) / 1000)
       setIsDisabled(timeLeft > 0)
     }, 100)
 
@@ -62,7 +62,7 @@ function App() {
     if (!lastPlacedTime) return
 
     const interval = setInterval(() => {
-      const timeLeft = Math.max(0, 10 - (Date.now() - lastPlacedTime) / 1000)
+      const timeLeft = Math.max(0, 3 - (Date.now() - lastPlacedTime) / 1000)
       setCountdown(Math.ceil(timeLeft))
 
       if (timeLeft === 0) {
@@ -95,7 +95,7 @@ function App() {
   }, [])
 
   const handlePixelPlace = useCallback((pixel: Pixel) => {
-    if (lastPlacedTime && Date.now() - lastPlacedTime < 10000) {
+    if (lastPlacedTime && Date.now() - lastPlacedTime < 3000) {
       return
     }
 
@@ -105,6 +105,18 @@ function App() {
       data: pixel
     })
   }, [lastPlacedTime, handleWebSocketMessage])
+
+  const handleColorSelect = useCallback((color: number) => {
+    console.log('Previous color:', selectedColor);
+    console.log('New color:', color);
+    if (selectedColor === color) {
+      console.log('Deselecting color');
+      setSelectedColor(null);
+    } else {
+      console.log('Selecting new color');
+      setSelectedColor(color);
+    }
+  }, [selectedColor]);
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -124,7 +136,7 @@ function App() {
       />
       <ColorPicker
         selectedColor={selectedColor}
-        onColorSelect={setSelectedColor}
+        onColorSelect={handleColorSelect}
       />
     </div>
   )
