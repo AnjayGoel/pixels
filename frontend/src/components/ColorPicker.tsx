@@ -14,7 +14,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({ selectedColor, onColor
     };
 
     return (
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white px-6 py-4 rounded-lg shadow-lg">
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-4 rounded-lg shadow-lg">
             <div className="flex justify-center gap-2">
                 {Object.entries(COLORS).map(([name, colorCode]) => (
                     <button

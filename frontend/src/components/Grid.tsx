@@ -14,18 +14,22 @@ interface GridProps {
 }
 
 export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, disabled }) => {
-    const [scale, setScale] = useState(5);
-    const [position, setPosition] = useState({ x: 0, y: 0 });
+    const PIXEL_SIZE = 8;
+    const GRID_SIZE = 100;
+    const STAGE_SIZE = 800;
+    const MIN_SCALE = 0.1;
+    const MAX_SCALE = 40;
+    const UPDATE_THROTTLE = 8; // Increase to ~120fps
+
+    const [scale, setScale] = useState(1);
+    const [position, setPosition] = useState({ 
+        x: window.innerWidth / 2 - (GRID_SIZE * PIXEL_SIZE) / 2, 
+        y: window.innerHeight / 2 - (GRID_SIZE * PIXEL_SIZE) / 2 
+    });
     const stageRef = useRef<Konva.Stage>(null);
     const layerRef = useRef<Konva.Layer>(null);
     const gridShapeRef = useRef<Konva.Shape | null>(null);
     const lastGridRef = useRef<string>('');
-    const PIXEL_SIZE = 1;
-    const GRID_SIZE = 100;
-    const STAGE_SIZE = 800;
-    const MIN_SCALE = 1;
-    const MAX_SCALE = 40;
-    const UPDATE_THROTTLE = 8; // Increase to ~120fps
     const lastUpdateTimeRef = useRef<number>(0);
 
     // Memoize the grid string representation for change detection
@@ -34,19 +38,6 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
     // Draw the grid on a canvas for better performance
     const drawGrid = useCallback(() => {
         if (!layerRef.current) return;
-        
-        const now = Date.now();
-        if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
-            // Throttle updates to avoid excessive rendering
-            return;
-        }
-        lastUpdateTimeRef.current = now;
-        
-        // Skip redrawing if grid hasn't changed
-        if (lastGridRef.current === gridString) {
-            return;
-        }
-        lastGridRef.current = gridString;
         
         // Clear the layer
         layerRef.current.destroyChildren();
@@ -68,8 +59,8 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                     }
                 }
             },
-            width: GRID_SIZE,
-            height: GRID_SIZE,
+            width: GRID_SIZE * PIXEL_SIZE,
+            height: GRID_SIZE * PIXEL_SIZE,
             listening: true,
         });
         
@@ -77,12 +68,37 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         group.add(gridShape);
         layerRef.current.add(group);
         layerRef.current.batchDraw();
-    }, [grid, gridString]);
+    }, [grid]);
 
     // Redraw when grid changes
     useEffect(() => {
+        // Always redraw when grid changes
         drawGrid();
-    }, [drawGrid]);
+    }, [grid, drawGrid]);
+
+    // Force redraw on scale changes
+    useEffect(() => {
+        drawGrid();
+    }, [scale, drawGrid]);
+
+    // Initial setup
+    useEffect(() => {
+        // Set initial position to center the grid
+        setPosition({ 
+            x: window.innerWidth / 2 - (GRID_SIZE * PIXEL_SIZE) / 2, 
+            y: window.innerHeight / 2 - (GRID_SIZE * PIXEL_SIZE) / 2 
+        });
+        
+        // Initial draw
+        drawGrid();
+        
+        // Force a redraw after a short delay to ensure everything is properly initialized
+        const timer = setTimeout(() => {
+            drawGrid();
+        }, 100);
+        
+        return () => clearTimeout(timer);
+    }, []);
 
     // Throttled wheel handler
     const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -126,13 +142,22 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
 
         const stage = e.target.getStage();
         const point = stage!.getPointerPosition();
-        const x = Math.floor((point!.x - position.x) / (PIXEL_SIZE * scale));
-        const y = Math.floor((point!.y - position.y) / (PIXEL_SIZE * scale));
+        
+        // Transform the point to account for stage position and scale
+        const transformedPoint = {
+            x: (point!.x - position.x) / scale,
+            y: (point!.y - position.y) / scale
+        };
+        
+        const x = Math.floor(transformedPoint.x / PIXEL_SIZE);
+        const y = Math.floor(transformedPoint.y / PIXEL_SIZE);
 
         if (x >= 0 && x < GRID_SIZE && y >= 0 && y < GRID_SIZE) {
             onPixelPlace({ x, y, color: selectedColor });
+            // Force an immediate redraw after placing a pixel
+            setTimeout(() => drawGrid(), 0);
         }
-    }, [disabled, position, scale, selectedColor, onPixelPlace]);
+    }, [disabled, position, scale, selectedColor, onPixelPlace, drawGrid]);
 
     // Throttled drag end handler
     const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
@@ -159,7 +184,7 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
     }, [scale]);
 
     const handleReset = useCallback(() => {
-        setScale(5);
+        setScale(1);
         setPosition({ x: 0, y: 0 });
     }, []);
 
@@ -198,15 +223,26 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                 onClick={handleClick}
                 scaleX={scale}
                 scaleY={scale}
-                className={disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+                onMouseEnter={() => {
+                    if (!disabled && selectedColor !== null) {
+                        // Position the hotspot at the top of the color block
+                        document.body.style.cursor = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="8" y="8" width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}" stroke="black" stroke-width="1"/></svg>') 16 8, auto`;
+                    } else if (!disabled) {
+                        document.body.style.cursor = 'pointer';
+                    } else {
+                        document.body.style.cursor = 'not-allowed';
+                    }
+                }}
+                onMouseLeave={() => {
+                    document.body.style.cursor = 'default';
+                }}
                 style={{
-                    cursor: disabled ? 'not-allowed' : selectedColor === null ? 'pointer' : `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><rect width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}" stroke="black" stroke-width="1"/></svg>') 8 8, auto`,
                     background: 'white',
                     position: 'fixed',
                     top: 0,
                     left: 0,
                     border: '1px solid #e5e5e5',
-                    boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)'
+                    boxShadow: '0 0 20px rgba(0, 0, 0, 0.1)'
                 }}
                 draggable
                 onDragEnd={handleDragEnd}

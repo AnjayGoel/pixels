@@ -88,6 +88,11 @@ function App() {
       
       // Trigger a re-render
       setGridVersion(prev => prev + 1)
+      
+      // Force a re-render after a short delay to ensure the update is visible
+      setTimeout(() => {
+        setGridVersion(prev => prev + 1)
+      }, 10)
     } else if (message.type === 'GRID_REFRESH') {
       gridRef.current = message.data as number[][]
       setGridVersion(prev => prev + 1)
