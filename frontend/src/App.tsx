@@ -109,13 +109,7 @@ function App() {
   const handleColorSelect = useCallback((color: number) => {
     console.log('Previous color:', selectedColor);
     console.log('New color:', color);
-    if (selectedColor === color) {
-      console.log('Deselecting color');
-      setSelectedColor(null);
-    } else {
-      console.log('Selecting new color');
-      setSelectedColor(color);
-    }
+    setSelectedColor(color);
   }, [selectedColor]);
 
   return (

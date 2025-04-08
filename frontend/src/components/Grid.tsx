@@ -200,11 +200,13 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                 scaleY={scale}
                 className={disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
                 style={{
-                    cursor: disabled ? 'not-allowed' : selectedColor === null ? 'pointer' : `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><rect width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}"/></svg>') 8 8, auto`,
+                    cursor: disabled ? 'not-allowed' : selectedColor === null ? 'pointer' : `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><rect width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}" stroke="black" stroke-width="1"/></svg>') 8 8, auto`,
                     background: 'white',
                     position: 'fixed',
                     top: 0,
-                    left: 0
+                    left: 0,
+                    border: '1px solid #e5e5e5',
+                    boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)'
                 }}
                 draggable
                 onDragEnd={handleDragEnd}
