@@ -118,7 +118,7 @@ function App() {
   }, [selectedColor]);
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-200">
       <Snackbar 
         open={countdown > 0}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}

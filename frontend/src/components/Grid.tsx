@@ -58,6 +58,11 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                         ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
                     }
                 }
+                
+                // Draw a subtle outline around the entire grid
+                ctx.strokeStyle = '#888888';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(0, 0, GRID_SIZE * PIXEL_SIZE, GRID_SIZE * PIXEL_SIZE);
             },
             width: GRID_SIZE * PIXEL_SIZE,
             height: GRID_SIZE * PIXEL_SIZE,
@@ -215,44 +220,54 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
 
     return (
         <>
-            <Stage
-                ref={stageRef}
-                width={window.innerWidth}
-                height={window.innerHeight}
-                onWheel={handleWheel}
-                onClick={handleClick}
-                scaleX={scale}
-                scaleY={scale}
-                onMouseEnter={() => {
-                    if (!disabled && selectedColor !== null) {
-                        // Position the hotspot at the top of the color block
-                        document.body.style.cursor = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="8" y="8" width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}" stroke="black" stroke-width="1"/></svg>') 16 8, auto`;
-                    } else if (!disabled) {
-                        document.body.style.cursor = 'pointer';
-                    } else {
-                        document.body.style.cursor = 'not-allowed';
-                    }
-                }}
-                onMouseLeave={() => {
-                    document.body.style.cursor = 'default';
-                }}
+            <div 
                 style={{
-                    background: 'white',
                     position: 'fixed',
                     top: 0,
                     left: 0,
-                    border: '1px solid #e5e5e5',
-                    boxShadow: '0 0 20px rgba(0, 0, 0, 0.1)'
+                    width: '100%',
+                    height: '100%',
+                    background: 'white',
+                    overflow: 'hidden'
                 }}
-                draggable
-                onDragEnd={handleDragEnd}
-                x={position.x}
-                y={position.y}
             >
-                <Layer ref={layerRef}>
-                    {/* Grid is drawn dynamically in the drawGrid function */}
-                </Layer>
-            </Stage>
+                <Stage
+                    ref={stageRef}
+                    width={window.innerWidth}
+                    height={window.innerHeight}
+                    onWheel={handleWheel}
+                    onClick={handleClick}
+                    scaleX={scale}
+                    scaleY={scale}
+                    onMouseEnter={() => {
+                        if (!disabled && selectedColor !== null) {
+                            // Position the hotspot at the top of the color block
+                            document.body.style.cursor = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="8" y="8" width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}" stroke="black" stroke-width="1"/></svg>') 16 8, auto`;
+                        } else if (!disabled) {
+                            document.body.style.cursor = 'pointer';
+                        } else {
+                            document.body.style.cursor = 'not-allowed';
+                        }
+                    }}
+                    onMouseLeave={() => {
+                        document.body.style.cursor = 'default';
+                    }}
+                    style={{
+                        background: 'white',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0
+                    }}
+                    draggable
+                    onDragEnd={handleDragEnd}
+                    x={position.x}
+                    y={position.y}
+                >
+                    <Layer ref={layerRef}>
+                        {/* Grid is drawn dynamically in the drawGrid function */}
+                    </Layer>
+                </Stage>
+            </div>
 
             <ZoomControls
                 scale={scale}
