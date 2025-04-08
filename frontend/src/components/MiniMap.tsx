@@ -122,11 +122,15 @@ export const MiniMap: React.FC<MiniMapProps> = ({
     }, [onViewportChange]);
 
     return (
-        <Paper className="fixed top-4 right-4 p-2" elevation={3}>
+        <Paper
+            className="fixed bottom-24 left-4 p-2 shadow-md border border-gray-200"
+            elevation={1}
+        >
             <Stage
                 width={MINI_MAP_SIZE}
                 height={MINI_MAP_SIZE}
                 onClick={handleClick}
+                style={{ background: 'white' }}
             >
                 <Layer ref={layerRef}>
                     {/* Mini-map is drawn dynamically in the drawMiniMap function */}

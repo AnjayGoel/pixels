@@ -1,4 +1,13 @@
+body {
+  margin: 0;
+  padding: 0;
+  background: white;
+}
+
 #root {
+  width: 100%;
+  min-height: 100vh;
+  background: white;
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
