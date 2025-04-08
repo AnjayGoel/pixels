@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
@@ -6,14 +6,39 @@ import { Grid } from './components/Grid'
 import { ColorPicker } from './components/ColorPicker'
 import { COLORS } from './constants/colors'
 import { Pixel, WebSocketUpdate } from './types'
+import { Snackbar, Alert } from '@mui/material'
 
 function App() {
-  const [grid, setGrid] = useState<number[][]>(() => 
-    Array(100).fill(null).map(() => Array(100).fill(COLORS.WHITE))
-  )
+  // Initialize the grid with proper typing
+  const initialGrid = Array(100).fill(null).map(() => Array(100).fill(COLORS.WHITE))
+  const gridRef = useRef<number[][]>(initialGrid)
+  
+  // Use state only for triggering re-renders
+  const [gridVersion, setGridVersion] = useState(0)
   const [selectedColor, setSelectedColor] = useState<number>(COLORS.BLACK)
   const [lastPlacedTime, setLastPlacedTime] = useState<number | null>(null)
   const [countdown, setCountdown] = useState<number>(0)
+  const [isDisabled, setIsDisabled] = useState(false)
+  const lastUpdateTimeRef = useRef<number>(0)
+  const UPDATE_THROTTLE = 8 // Increase to ~120fps
+
+  // Memoize the grid to prevent unnecessary re-renders
+  const memoizedGrid = useMemo(() => gridRef.current, [gridVersion])
+
+  // Update disabled state
+  useEffect(() => {
+    if (!lastPlacedTime) {
+      setIsDisabled(false)
+      return
+    }
+
+    const interval = setInterval(() => {
+      const timeLeft = Math.max(0, 10 - (Date.now() - lastPlacedTime) / 1000)
+      setIsDisabled(timeLeft > 0)
+    }, 100)
+
+    return () => clearInterval(interval)
+  }, [lastPlacedTime])
 
   // Mock WebSocket updates
   useEffect(() => {
@@ -48,44 +73,51 @@ function App() {
     return () => clearInterval(interval)
   }, [lastPlacedTime])
 
-  const handleWebSocketMessage = (message: WebSocketUpdate) => {
-    if (message.type === 'PIXEL_UPDATE') {
-      const pixel = message.data as Pixel;
-      setGrid(prevGrid => {
-        const newGrid = [...prevGrid];
-        newGrid[pixel.y] = [...newGrid[pixel.y]];
-        newGrid[pixel.y][pixel.x] = pixel.color;
-        return newGrid;
-      });
-    } else if (message.type === 'GRID_REFRESH') {
-      setGrid(message.data as number[][]);
+  const handleWebSocketMessage = useCallback((message: WebSocketUpdate) => {
+    const now = Date.now()
+    if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
+      return
     }
-  };
+    lastUpdateTimeRef.current = now
+    
+    if (message.type === 'PIXEL_UPDATE') {
+      const pixel = message.data as Pixel
+      
+      // Update the grid immediately
+      gridRef.current[pixel.y][pixel.x] = pixel.color
+      
+      // Trigger a re-render
+      setGridVersion(prev => prev + 1)
+    } else if (message.type === 'GRID_REFRESH') {
+      gridRef.current = message.data as number[][]
+      setGridVersion(prev => prev + 1)
+    }
+  }, [])
 
-  const handlePixelPlace = (pixel: Pixel) => {
+  const handlePixelPlace = useCallback((pixel: Pixel) => {
     if (lastPlacedTime && Date.now() - lastPlacedTime < 10000) {
       return
     }
 
     setLastPlacedTime(Date.now())
-    // In a real implementation, this would send the update to the WebSocket server
     handleWebSocketMessage({
       type: 'PIXEL_UPDATE',
       data: pixel
     })
-  }
-
-  const isDisabled = !!(lastPlacedTime && Date.now() - lastPlacedTime < 10000)
+  }, [lastPlacedTime, handleWebSocketMessage])
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {countdown > 0 && (
-        <div className="fixed top-4 right-4 bg-white p-4 rounded-lg shadow-lg">
-          Wait {countdown}s
-        </div>
-      )}
+      <Snackbar 
+        open={countdown > 0}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert severity="info" variant="filled">
+          Wait {countdown}s before placing next pixel
+        </Alert>
+      </Snackbar>
       <Grid
-        grid={grid}
+        grid={memoizedGrid}
         selectedColor={selectedColor}
         onPixelPlace={handlePixelPlace}
         disabled={isDisabled}
