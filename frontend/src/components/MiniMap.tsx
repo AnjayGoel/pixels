@@ -26,9 +26,10 @@ export const MiniMap: React.FC<MiniMapProps> = ({
     const layerRef = useRef<Konva.Layer>(null);
     const lastGridRef = useRef<string>('');
     const lastViewportRef = useRef<string>('');
-    const UPDATE_THROTTLE = 16; // Increase update frequency for smoother dragging
+    const UPDATE_THROTTLE = 16; // For grid updates only
     const lastUpdateTimeRef = useRef<number>(0);
     const [isDragging, setIsDragging] = useState(false);
+    const viewportRef = useRef<Konva.Rect>(null);
 
     // Memoize the grid string representation for change detection
     const gridString = useMemo(() => JSON.stringify(grid), [grid]);
@@ -85,6 +86,16 @@ export const MiniMap: React.FC<MiniMapProps> = ({
         drawMiniMap();
     }, [drawMiniMap]);
 
+    // Update viewport position when viewportBounds changes
+    useEffect(() => {
+        if (viewportRef.current && !isDragging) {
+            viewportRef.current.x(viewportBounds.x * PIXEL_SIZE);
+            viewportRef.current.y(viewportBounds.y * PIXEL_SIZE);
+            viewportRef.current.width(viewportBounds.width * PIXEL_SIZE);
+            viewportRef.current.height(viewportBounds.height * PIXEL_SIZE);
+        }
+    }, [viewportBounds, isDragging, PIXEL_SIZE]);
+
     // Throttled click handler
     const handleClick = useCallback((e: any) => {
         const now = Date.now();
@@ -108,15 +119,9 @@ export const MiniMap: React.FC<MiniMapProps> = ({
         setIsDragging(true);
     }, []);
 
-    // Handle viewport drag
+    // Handle viewport drag - no throttling for real-time updates
     const handleViewportDrag = useCallback((e: any) => {
         if (!isDragging) return;
-        
-        const now = Date.now();
-        if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
-            return;
-        }
-        lastUpdateTimeRef.current = now;
 
         const viewport = e.target;
         // Convert the viewport position to grid coordinates
@@ -131,12 +136,6 @@ export const MiniMap: React.FC<MiniMapProps> = ({
     const handleViewportDragEnd = useCallback((e: any) => {
         setIsDragging(false);
         
-        const now = Date.now();
-        if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
-            return;
-        }
-        lastUpdateTimeRef.current = now;
-
         const viewport = e.target;
         // Convert the viewport position to grid coordinates
         const x = viewport.x() / PIXEL_SIZE;
@@ -157,6 +156,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
                 </Layer>
                 <Layer>
                     <Rect
+                        ref={viewportRef}
                         x={viewportBounds.x * PIXEL_SIZE}
                         y={viewportBounds.y * PIXEL_SIZE}
                         width={viewportBounds.width * PIXEL_SIZE}

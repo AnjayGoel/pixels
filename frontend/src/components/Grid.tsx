@@ -246,6 +246,10 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                     onClick={handleClick}
                     scaleX={scale}
                     scaleY={scale}
+                    x={position.x}
+                    y={position.y}
+                    draggable
+                    onDragEnd={handleDragEnd}
                     onMouseEnter={() => {
                         if (!disabled && selectedColor !== null) {
                             // Position the hotspot at the top of the color block
@@ -265,10 +269,6 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                         top: 0,
                         left: 0
                     }}
-                    draggable
-                    onDragEnd={handleDragEnd}
-                    x={position.x}
-                    y={position.y}
                 >
                     <Layer ref={layerRef}>
                         {/* Grid is drawn dynamically in the drawGrid function */}
