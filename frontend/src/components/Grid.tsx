@@ -189,18 +189,22 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
     const viewportBounds = useMemo(() => getViewportBounds(), [getViewportBounds]);
 
     return (
-        <div className="overflow-hidden w-full h-screen flex items-center justify-center relative">
+        <>
             <Stage
                 ref={stageRef}
-                width={STAGE_SIZE}
-                height={STAGE_SIZE}
+                width={window.innerWidth}
+                height={window.innerHeight}
                 onWheel={handleWheel}
                 onClick={handleClick}
                 scaleX={scale}
                 scaleY={scale}
                 className={disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
                 style={{
-                    cursor: disabled ? 'not-allowed' : selectedColor === null ? 'pointer' : `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><rect width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}"/></svg>') 8 8, auto`
+                    cursor: disabled ? 'not-allowed' : selectedColor === null ? 'pointer' : `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><rect width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}"/></svg>') 8 8, auto`,
+                    background: 'white',
+                    position: 'fixed',
+                    top: 0,
+                    left: 0
                 }}
                 draggable
                 onDragEnd={handleDragEnd}
@@ -224,6 +228,6 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                 viewportBounds={viewportBounds}
                 onViewportChange={handleMiniMapViewportChange}
             />
-        </div>
+        </>
     );
 }; 
