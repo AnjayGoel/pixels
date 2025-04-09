@@ -1,0 +1,35 @@
+{
+    "version": "0.2.0",
+    "compounds": [
+        {
+            "name": "Start React App and Debug in Chrome",
+            "configurations": [
+                "npm dev",
+                "Chrome Debug"
+            ]
+        }
+    ],
+    "configurations": [
+        {
+            "name": "npm dev",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": [
+                "run",
+                "dev"
+            ],
+            "cwd": "${workspaceFolder}/frontend",
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
+        },
+        {
+            "name": "Chrome Debug",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:3000",
+            "webRoot": "${workspaceFolder}/frontend/src"
+        }
+    ]
+}

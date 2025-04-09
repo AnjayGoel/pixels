@@ -251,17 +251,22 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                     draggable
                     onDragEnd={handleDragEnd}
                     onMouseEnter={() => {
-                        if (!disabled && selectedColor !== null) {
+                        if (selectedColor !== null) {
                             // Position the hotspot at the top of the color block
                             document.body.style.cursor = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="8" y="8" width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}" stroke="black" stroke-width="1"/></svg>') 16 8, auto`;
-                        } else if (!disabled) {
-                            document.body.style.cursor = 'pointer';
                         } else {
-                            document.body.style.cursor = 'not-allowed';
+                            document.body.style.cursor = 'pointer';
                         }
                     }}
                     onMouseLeave={() => {
                         document.body.style.cursor = 'default';
+                    }}
+                    onMouseMove={() => {
+                        if (selectedColor !== null) {
+                            document.body.style.cursor = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="8" y="8" width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}" stroke="black" stroke-width="1"/></svg>') 16 8, auto`;
+                        } else {
+                            document.body.style.cursor = 'pointer';
+                        }
                     }}
                     style={{
                         background: 'white',
