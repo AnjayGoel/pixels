@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
 import { Grid } from './components/Grid'
 import { ColorPicker } from './components/ColorPicker'
 import { COLORS } from './constants/colors'
-import { Pixel, WebSocketUpdate } from './types'
+import { Pixel, WebSocketUpdate, BatchUpdate } from './types'
 import { Snackbar, Alert } from '@mui/material'
 
 function App() {
@@ -42,7 +40,8 @@ function App() {
 
   // Mock WebSocket updates
   useEffect(() => {
-    const interval = setInterval(() => {
+    // Regular single pixel updates
+    const pixelInterval = setInterval(() => {
       // Simulate random pixel updates
       const x = Math.floor(Math.random() * 100)
       const y = Math.floor(Math.random() * 100)
@@ -52,9 +51,41 @@ function App() {
         type: 'PIXEL_UPDATE',
         data: { x, y, color }
       })
-    }, 500)
+    }, 2000) // Increased from 500ms to 2000ms
 
-    return () => clearInterval(interval)
+    // Batch updates every 5 seconds
+    const batchInterval = setInterval(() => {
+      // Create a random size grid (between 5x5 and 15x15)
+      const size = Math.floor(Math.random() * 11) + 5 // Reduced from 10x10-30x30 to 5x5-15x15
+      const startX = Math.floor(Math.random() * (100 - size))
+      const startY = Math.floor(Math.random() * (100 - size))
+      
+      // Create a random pattern for the batch update
+      const batchGrid = Array(size).fill(null).map(() => 
+        Array(size).fill(null).map(() => {
+          // Random colors with lower probability of colored pixels
+          if (Math.random() > 0.7) { // Changed from 0.3 to 0.7 (30% chance instead of 70%)
+            return Object.values(COLORS)[Math.floor(Math.random() * Object.values(COLORS).length)]
+          } else {
+            return COLORS.WHITE // Use WHITE as transparent
+          }
+        })
+      )
+      
+      // Create the batch update message
+      const batchUpdateMessage: WebSocketUpdate = {
+        type: 'BATCH_UPDATE',
+        data: { startX, startY, grid: batchGrid }
+      }
+      
+      // Send the message
+      handleWebSocketMessage(batchUpdateMessage)
+    }, 5000) // Increased from 3000ms to 5000ms
+
+    return () => {
+      clearInterval(pixelInterval)
+      clearInterval(batchInterval)
+    }
   }, [])
 
   // Countdown timer
@@ -75,9 +106,13 @@ function App() {
 
   const handleWebSocketMessage = useCallback((message: WebSocketUpdate) => {
     const now = Date.now()
-    if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
+    
+    // Only throttle non-batch updates
+    if (message.type !== 'BATCH_UPDATE' && now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
       return
     }
+    
+    // Update the last update time for all messages
     lastUpdateTimeRef.current = now
     
     if (message.type === 'PIXEL_UPDATE') {
@@ -96,6 +131,40 @@ function App() {
     } else if (message.type === 'GRID_REFRESH') {
       gridRef.current = message.data as number[][]
       setGridVersion(prev => prev + 1)
+    } else if (message.type === 'BATCH_UPDATE') {
+      const batchUpdate = message.data as BatchUpdate
+      const { startX, startY, grid } = batchUpdate
+      
+      // Create a new grid to ensure React detects the change
+      const newGrid = [...gridRef.current.map(row => [...row])]
+      
+      // Update the grid with the batch update
+      for (let y = 0; y < grid.length; y++) {
+        for (let x = 0; x < grid[y].length; x++) {
+          const targetY = startY + y
+          const targetX = startX + x
+          
+          // Only update if within grid bounds and not transparent (WHITE)
+          if (targetY >= 0 && targetY < newGrid.length && 
+              targetX >= 0 && targetX < newGrid[0].length &&
+              grid[y][x] !== COLORS.WHITE) { // Skip transparent pixels
+            newGrid[targetY][targetX] = grid[y][x]
+          }
+        }
+      }
+      
+      // Update the grid reference with the new grid
+      gridRef.current = newGrid
+      
+      // Force multiple re-renders to ensure the update is visible
+      setGridVersion(prev => prev + 1)
+      
+      // Force additional re-renders with increasing delays
+      for (let i = 0; i < 5; i++) {
+        setTimeout(() => {
+          setGridVersion(prev => prev + 1)
+        }, i * 100)
+      }
     }
   }, [])
 
@@ -112,10 +181,8 @@ function App() {
   }, [lastPlacedTime, handleWebSocketMessage])
 
   const handleColorSelect = useCallback((color: number) => {
-    console.log('Previous color:', selectedColor);
-    console.log('New color:', color);
-    setSelectedColor(color);
-  }, [selectedColor]);
+    setSelectedColor(color)
+  }, [])
 
   return (
     <div className="min-h-screen bg-gray-200">
@@ -127,6 +194,7 @@ function App() {
           Wait {countdown}s before placing next pixel
         </Alert>
       </Snackbar>
+      
       <Grid
         grid={memoizedGrid}
         selectedColor={selectedColor}

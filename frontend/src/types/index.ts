@@ -9,7 +9,13 @@ export interface GridState {
     lastUpdate: number | null;
 }
 
+export interface BatchUpdate {
+    startX: number;
+    startY: number;
+    grid: number[][];
+}
+
 export interface WebSocketUpdate {
-    type: 'PIXEL_UPDATE' | 'GRID_REFRESH';
-    data: Pixel | number[][];
+    type: 'PIXEL_UPDATE' | 'GRID_REFRESH' | 'BATCH_UPDATE';
+    data: Pixel | number[][] | BatchUpdate;
 } 

@@ -1,4 +1,4 @@
-import { Stage, Layer, Rect, Group } from 'react-konva';
+import { Stage, Layer } from 'react-konva';
 import { Pixel } from '../types';
 import { COLOR_HEX_MAP } from '../constants/colors';
 import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
@@ -16,7 +16,6 @@ interface GridProps {
 export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, disabled }) => {
     const PIXEL_SIZE = 8;
     const GRID_SIZE = 100;
-    const STAGE_SIZE = 800;
     const MIN_SCALE = 0.1;
     const MAX_SCALE = 40;
     const UPDATE_THROTTLE = 8; // Increase to ~120fps
@@ -29,7 +28,6 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
     const stageRef = useRef<Konva.Stage>(null);
     const layerRef = useRef<Konva.Layer>(null);
     const gridShapeRef = useRef<Konva.Shape | null>(null);
-    const lastGridRef = useRef<string>('');
     const lastUpdateTimeRef = useRef<number>(0);
 
     // Memoize the grid string representation for change detection
@@ -47,7 +45,7 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         
         // Create a single shape for the entire grid
         const gridShape = new Konva.Shape({
-            sceneFunc: (context, shape) => {
+            sceneFunc: (context) => {
                 const ctx = context._context;
                 
                 // Draw each pixel
@@ -73,7 +71,12 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         group.add(gridShape);
         layerRef.current.add(group);
         layerRef.current.batchDraw();
-    }, [grid]);
+    }, [grid, PIXEL_SIZE, GRID_SIZE, COLOR_HEX_MAP]);
+
+    // Force a redraw when the grid changes
+    useEffect(() => {
+        drawGrid();
+    }, [gridString, drawGrid]);
 
     // Redraw when grid changes
     useEffect(() => {
@@ -204,7 +207,6 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
     const getViewportBounds = useCallback(() => {
         if (!stageRef.current) return { x: 0, y: 0, width: GRID_SIZE, height: GRID_SIZE };
         
-        const stage = stageRef.current;
         const viewportWidth = window.innerWidth / scale;
         const viewportHeight = window.innerHeight / scale;
         
