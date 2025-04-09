@@ -17,8 +17,9 @@ function App() {
   const [lastPlacedTime, setLastPlacedTime] = useState<number | null>(null)
   const [countdown, setCountdown] = useState<number>(0)
   const [isDisabled, setIsDisabled] = useState(false)
-  const lastUpdateTimeRef = useRef<number>(0)
-  const UPDATE_THROTTLE = 8 // Increase to ~120fps
+  const lastRenderTimeRef = useRef<number>(0)
+  const UPDATE_THROTTLE = 8 // Throttle re-renders to ~120fps
+  const pendingRenderRef = useRef<boolean>(false)
 
   // Memoize the grid to prevent unnecessary re-renders
   const memoizedGrid = useMemo(() => gridRef.current, [gridVersion])
@@ -104,33 +105,42 @@ function App() {
     return () => clearInterval(interval)
   }, [lastPlacedTime])
 
-  const handleWebSocketMessage = useCallback((message: WebSocketUpdate) => {
+  // Function to trigger a throttled re-render
+  const triggerThrottledRender = useCallback(() => {
     const now = Date.now()
-    
-    // Only throttle non-batch updates
-    if (message.type !== 'BATCH_UPDATE' && now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
+    if (now - lastRenderTimeRef.current < UPDATE_THROTTLE) {
+      // If we're throttled, mark that we have a pending render
+      pendingRenderRef.current = true
       return
     }
     
-    // Update the last update time for all messages
-    lastUpdateTimeRef.current = now
+    // Update the last render time
+    lastRenderTimeRef.current = now
+    // Trigger the re-render
+    setGridVersion(prev => prev + 1)
     
+    // If we had a pending render, schedule another render after the throttle period
+    if (pendingRenderRef.current) {
+      pendingRenderRef.current = false
+      setTimeout(() => {
+        lastRenderTimeRef.current = 0 // Reset the last render time to allow immediate render
+        triggerThrottledRender()
+      }, UPDATE_THROTTLE)
+    }
+  }, [])
+
+  const handleWebSocketMessage = useCallback((message: WebSocketUpdate) => {
     if (message.type === 'PIXEL_UPDATE') {
       const pixel = message.data as Pixel
       
-      // Update the grid immediately
+      // Always update the grid immediately
       gridRef.current[pixel.y][pixel.x] = pixel.color
       
-      // Trigger a re-render
-      setGridVersion(prev => prev + 1)
-      
-      // Force a re-render after a short delay to ensure the update is visible
-      setTimeout(() => {
-        setGridVersion(prev => prev + 1)
-      }, 10)
+      // Trigger a throttled re-render
+      triggerThrottledRender()
     } else if (message.type === 'GRID_REFRESH') {
       gridRef.current = message.data as number[][]
-      setGridVersion(prev => prev + 1)
+      triggerThrottledRender()
     } else if (message.type === 'BATCH_UPDATE') {
       const batchUpdate = message.data as BatchUpdate
       const { startX, startY, grid } = batchUpdate
@@ -156,17 +166,10 @@ function App() {
       // Update the grid reference with the new grid
       gridRef.current = newGrid
       
-      // Force multiple re-renders to ensure the update is visible
-      setGridVersion(prev => prev + 1)
-      
-      // Force additional re-renders with increasing delays
-      for (let i = 0; i < 5; i++) {
-        setTimeout(() => {
-          setGridVersion(prev => prev + 1)
-        }, i * 100)
-      }
+      // Trigger a throttled re-render
+      triggerThrottledRender()
     }
-  }, [])
+  }, [triggerThrottledRender])
 
   const handlePixelPlace = useCallback((pixel: Pixel) => {
     if (lastPlacedTime && Date.now() - lastPlacedTime < 3000) {

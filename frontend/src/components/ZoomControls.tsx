@@ -19,22 +19,24 @@ export const ZoomControls: React.FC<ZoomControlsProps> = ({
     const scaleDisplay = scale < 10 ? scale.toFixed(1) + 'x' : Math.round(scale) + 'x';
 
     return (
-        <Paper className="fixed top-4 right-4 p-2" elevation={3}>
-            <IconButton onClick={onZoomIn} size="small">
-                <AddIcon />
-            </IconButton>
+        <Paper className="fixed bottom-4 right-4 p-2" elevation={3}>
+            <div className="flex flex-col items-center">
+                <IconButton onClick={onZoomIn} size="small">
+                    <AddIcon />
+                </IconButton>
 
-            <Typography variant="body2" className="select-none">
-                {scaleDisplay}
-            </Typography>
+                <Typography variant="body2" className="select-none">
+                    {scaleDisplay}
+                </Typography>
 
-            <IconButton onClick={onZoomOut} size="small">
-                <RemoveIcon />
-            </IconButton>
+                <IconButton onClick={onZoomOut} size="small">
+                    <RemoveIcon />
+                </IconButton>
 
-            <IconButton onClick={onReset} size="small" className="mt-2">
-                <HomeIcon />
-            </IconButton>
+                <IconButton onClick={onReset} size="small">
+                    <HomeIcon />
+                </IconButton>
+            </div>
         </Paper>
     );
 }; 
