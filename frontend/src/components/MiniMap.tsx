@@ -67,8 +67,10 @@ export const MiniMap: React.FC<MiniMapProps> = ({
                 for (let y = 0; y < GRID_SIZE; y++) {
                     for (let x = 0; x < GRID_SIZE; x++) {
                         const colorCode = grid[y][x];
-                        ctx.fillStyle = COLOR_HEX_MAP[colorCode];
-                        ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+                        if (colorCode !== undefined && COLOR_HEX_MAP[colorCode]) {
+                            ctx.fillStyle = COLOR_HEX_MAP[colorCode];
+                            ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+                        }
                     }
                 }
             },
@@ -80,7 +82,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
         group.add(gridShape);
         layerRef.current.add(group);
         layerRef.current.batchDraw();
-    }, [grid, gridString]);
+    }, [grid, gridString, PIXEL_SIZE]);
 
     useEffect(() => {
         drawMiniMap();

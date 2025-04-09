@@ -52,7 +52,7 @@ function App() {
         type: 'PIXEL_UPDATE',
         data: { x, y, color }
       })
-    }, 2000)
+    }, 500)
 
     return () => clearInterval(interval)
   }, [])
