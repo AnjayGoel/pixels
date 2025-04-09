@@ -95,7 +95,7 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
             } catch (error) {
                 console.error('Error in debounced redraw:', error);
             }
-        }, 32); // Reduced to ~30fps for stability
+        }, 16); // Reduced to ~30fps for stability
     }, [drawGrid]);
 
     // Force a redraw when the grid changes

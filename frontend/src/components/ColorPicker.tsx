@@ -11,12 +11,12 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({ selectedColor, onColor
     };
 
     return (
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-2 sm:p-4 rounded-lg shadow-lg">
-            <div className="flex flex-wrap justify-center gap-1 sm:gap-2 max-w-[90vw]">
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-2 rounded-lg shadow-lg">
+            <div className="flex flex-wrap justify-center gap-1 max-w-[300px] sm:max-w-[500px]">
                 {Object.entries(COLORS).map(([name, colorCode]) => (
                     <button
                         key={colorCode}
-                        className={`w-6 h-6 sm:w-7 sm:h-7 rounded-md transition-all ${
+                        className={`w-8 h-8 sm:w-7 sm:h-7 rounded-md transition-all ${
                             selectedColor === colorCode
                                 ? 'scale-105'
                                 : 'hover:scale-105'

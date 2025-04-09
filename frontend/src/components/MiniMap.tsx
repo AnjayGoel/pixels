@@ -1,4 +1,4 @@
-import { Stage, Layer, Shape, Group, Rect } from 'react-konva';
+import { Stage, Layer, Rect } from 'react-konva';
 import { COLOR_HEX_MAP } from '../constants/colors';
 import { GRID_CONSTANTS } from '../constants/grid';
 import { Paper } from '@mui/material';
@@ -21,7 +21,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
     viewportBounds,
     onViewportChange,
 }) => {
-    const { SIZE: GRID_SIZE, PIXEL_SIZE } = GRID_CONSTANTS;
+    const { SIZE: GRID_SIZE } = GRID_CONSTANTS;
     const MINI_MAP_SIZE = 150;
     const MINI_PIXEL_SIZE = MINI_MAP_SIZE / GRID_SIZE;
     const layerRef = useRef<Konva.Layer>(null);
@@ -38,27 +38,27 @@ export const MiniMap: React.FC<MiniMapProps> = ({
 
     const drawMiniMap = useCallback(() => {
         if (!layerRef.current) return;
-        
+
         const now = Date.now();
         if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
             return;
         }
         lastUpdateTimeRef.current = now;
-        
+
         if (lastGridRef.current === gridString && lastViewportRef.current === viewportString) {
             return;
         }
         lastGridRef.current = gridString;
         lastViewportRef.current = viewportString;
-        
+
         layerRef.current.destroyChildren();
-        
+
         const group = new Konva.Group();
-        
+
         const gridShape = new Konva.Shape({
             sceneFunc: (context, shape) => {
                 const ctx = context._context;
-                
+
                 for (let y = 0; y < GRID_SIZE; y++) {
                     for (let x = 0; x < GRID_SIZE; x++) {
                         const colorCode = grid[y][x];
@@ -73,7 +73,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
             height: MINI_MAP_SIZE,
             listening: false,
         });
-        
+
         group.add(gridShape);
         layerRef.current.add(group);
         layerRef.current.batchDraw();
@@ -98,13 +98,13 @@ export const MiniMap: React.FC<MiniMapProps> = ({
             return;
         }
         lastUpdateTimeRef.current = now;
-        
+
         const stage = e.target.getStage();
         const point = stage.getPointerPosition();
-        
+
         const x = (point.x / MINI_MAP_SIZE) * GRID_SIZE;
         const y = (point.y / MINI_MAP_SIZE) * GRID_SIZE;
-        
+
         onViewportChange(x, y);
     }, [onViewportChange, GRID_SIZE]);
 
@@ -118,17 +118,17 @@ export const MiniMap: React.FC<MiniMapProps> = ({
         const viewport = e.target;
         const x = viewport.x() / MINI_PIXEL_SIZE;
         const y = viewport.y() / MINI_PIXEL_SIZE;
-        
+
         onViewportChange(x, y);
     }, [isDragging, onViewportChange, MINI_PIXEL_SIZE]);
 
     const handleViewportDragEnd = useCallback((e: any) => {
         setIsDragging(false);
-        
+
         const viewport = e.target;
         const x = viewport.x() / MINI_PIXEL_SIZE;
         const y = viewport.y() / MINI_PIXEL_SIZE;
-        
+
         onViewportChange(x, y);
     }, [onViewportChange, MINI_PIXEL_SIZE]);
 
