@@ -6,21 +6,26 @@ import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import Konva from 'konva';
 import { ZoomControls } from './ZoomControls';
 import { MiniMap } from './MiniMap';
+import { usePixelStream } from '../contexts/PixelStreamContext';
 
 interface GridProps {
-    grid: number[][];
     selectedColor: number | null;
-    onPixelPlace: (pixel: Pixel) => void;
-    disabled: boolean;
+    disabled?: boolean;
+    onPixelPlace?: () => void;
 }
 
-export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, disabled }) => {
+export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlace }) => {
     const { SIZE: GRID_SIZE, PIXEL_SIZE, MIN_SCALE, MAX_SCALE, UPDATE_THROTTLE } = GRID_CONSTANTS;
+    
+    // Refs to konva stage and layer
     const stageRef = useRef<Konva.Stage>(null);
     const layerRef = useRef<Konva.Layer>(null);
+
+
     const lastUpdateTimeRef = useRef<number>(0);
-    const redrawTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const lastDrawnGrid = useRef<string>('');
+    const pendingPixelsRef = useRef<Pixel[]>([]);
+    const renderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const { placePixel } = usePixelStream();
 
     // Memoize position and scale to prevent unnecessary re-renders
     const [scale, setScale] = useState(1);
@@ -28,9 +33,6 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         x: window.innerWidth / 2 - (GRID_SIZE * PIXEL_SIZE) / 2,
         y: window.innerHeight / 2 - (GRID_SIZE * PIXEL_SIZE) / 2
     });
-
-    // Memoize grid string for change detection
-    const gridString = useMemo(() => JSON.stringify(grid), [grid]);
 
     // Memoize position and scale updates
     const updatePosition = useCallback((newPosition: { x: number; y: number }) => {
@@ -41,88 +43,60 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         setScale(newScale);
     }, []);
 
-    // Memoize the draw function
-    const drawGrid = useCallback(() => {
-        if (!layerRef.current) return;
+    // Handle pixel updates with debouncing
+    const handlePixelUpdates = useCallback((pixels: Pixel[]) => {
+        const layer = layerRef.current;
+        if (!layer) return;
 
-        try {
-            // Only redraw if grid has changed
-            if (gridString === lastDrawnGrid.current) return;
-            lastDrawnGrid.current = gridString;
+        // Add new pixels to pending list
+        pendingPixelsRef.current.push(...pixels);
 
-            // Clear the layer
-            layerRef.current.destroyChildren();
+        // Clear existing timeout
+        if (renderTimeoutRef.current) {
+            clearTimeout(renderTimeoutRef.current);
+        }
 
-            // Create a single group for all pixels
+        // Set new timeout for rendering
+        renderTimeoutRef.current = setTimeout(() => {
             const group = new Konva.Group();
 
-            // Create a single shape for the entire grid
-            const gridShape = new Konva.Shape({
-                sceneFunc: (context) => {
-                    const ctx = context._context;
+            // Process all pending pixels
+            for (const pixel of pendingPixelsRef.current) {
+                const rect = new Konva.Rect({
+                    x: pixel.x * PIXEL_SIZE,
+                    y: pixel.y * PIXEL_SIZE,
+                    width: PIXEL_SIZE,
+                    height: PIXEL_SIZE,
+                    fill: COLOR_HEX_MAP[pixel.color],
+                    listening: false
+                });
 
-                    // Draw all pixels
-                    for (let y = 0; y < GRID_SIZE; y++) {
-                        for (let x = 0; x < GRID_SIZE; x++) {
-                            const colorCode = grid[y][x];
-                            if (colorCode !== undefined && COLOR_HEX_MAP[colorCode]) {
-                                ctx.fillStyle = COLOR_HEX_MAP[colorCode];
-                                ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
-                            }
-                        }
-                    }
-                },
-                width: GRID_SIZE * PIXEL_SIZE,
-                height: GRID_SIZE * PIXEL_SIZE,
-                listening: true,
-            });
-
-            // Add a single outline around the entire grid
-            const outlineShape = new Konva.Shape({
-                sceneFunc: (context) => {
-                    const ctx = context._context;
-                    ctx.strokeStyle = '#888888';
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(0, 0, GRID_SIZE * PIXEL_SIZE, GRID_SIZE * PIXEL_SIZE);
-                },
-                width: GRID_SIZE * PIXEL_SIZE,
-                height: GRID_SIZE * PIXEL_SIZE,
-                listening: false,
-            });
-
-            group.add(gridShape);
-            group.add(outlineShape);
-            layerRef.current.add(group);
-            layerRef.current.batchDraw();
-        } catch (error) {
-            console.error('Error drawing grid:', error);
-        }
-    }, [grid, PIXEL_SIZE, GRID_SIZE, gridString]);
-
-    // Debounced redraw function with error handling
-    const debouncedRedraw = useCallback(() => {
-        if (redrawTimeoutRef.current) {
-            clearTimeout(redrawTimeoutRef.current);
-        }
-        redrawTimeoutRef.current = setTimeout(() => {
-            try {
-                drawGrid();
-            } catch (error) {
-                console.error('Error in debounced redraw:', error);
+                group.add(rect);
             }
-        }, 16); // Reduced to ~30fps for stability
-    }, [drawGrid]);
 
-    // Single effect for all redraw triggers
+            // Clear pending pixels
+            pendingPixelsRef.current = [];
+
+            // Add group to layer and draw
+            if (group.children.length > 0) {
+                layer.add(group);
+                layer.batchDraw();
+            }
+        }, 16); // ~60fps
+    }, [PIXEL_SIZE]);
+
+    // Subscribe to pixel stream
+    const { subscribe, unsubscribe } = usePixelStream();
     useEffect(() => {
-        debouncedRedraw();
-    }, [gridString, scale, position, debouncedRedraw]);
+        subscribe(handlePixelUpdates);
+        return () => unsubscribe(handlePixelUpdates);
+    }, [handlePixelUpdates, subscribe, unsubscribe]);
 
     // Cleanup on unmount
     useEffect(() => {
         return () => {
-            if (redrawTimeoutRef.current) {
-                clearTimeout(redrawTimeoutRef.current);
+            if (renderTimeoutRef.current) {
+                clearTimeout(renderTimeoutRef.current);
             }
         };
     }, []);
@@ -162,33 +136,28 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         updatePosition(newPos);
     }, [updateScale, updatePosition, MIN_SCALE, MAX_SCALE, UPDATE_THROTTLE]);
 
-    const handleClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const handlePixelPlace = useCallback((x: number, y: number) => {
         if (disabled || selectedColor === null) return;
+        const pixel = { x, y, color: selectedColor };
+        placePixel(pixel);
+        onPixelPlace?.();
+    }, [selectedColor, disabled, placePixel, onPixelPlace]);
 
-        const now = Date.now();
-        if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
-            return;
-        }
-        lastUpdateTimeRef.current = now;
-
+    const handleClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+        if (disabled) return;
         const stage = e.target.getStage();
-        const pointerPos = stage!.getPointerPosition();
-
-        if (!pointerPos) return;
-
-        const stageX = stage!.x();
-        const stageY = stage!.y();
-
-        const relativeX = (pointerPos.x - stageX) / scale;
-        const relativeY = (pointerPos.y - stageY) / scale;
-
-        const gridX = Math.floor(relativeX / PIXEL_SIZE);
-        const gridY = Math.floor(relativeY / PIXEL_SIZE);
-
+        if (!stage) return;
+        
+        const point = stage.getPointerPosition();
+        if (!point) return;
+        
+        const gridX = Math.floor((point.x - position.x) / (PIXEL_SIZE * scale));
+        const gridY = Math.floor((point.y - position.y) / (PIXEL_SIZE * scale));
+        
         if (gridX >= 0 && gridX < GRID_SIZE && gridY >= 0 && gridY < GRID_SIZE) {
-            onPixelPlace({ x: gridX, y: gridY, color: selectedColor });
+            handlePixelPlace(gridX, gridY);
         }
-    }, [disabled, scale, selectedColor, onPixelPlace, PIXEL_SIZE, GRID_SIZE, UPDATE_THROTTLE]);
+    }, [disabled, scale, position, PIXEL_SIZE, GRID_SIZE, handlePixelPlace]);
 
     const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
         const now = Date.now();
@@ -246,7 +215,6 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         };
     }, [position, scale, PIXEL_SIZE, GRID_SIZE]);
 
-
     return (
         <>
             <div
@@ -302,7 +270,6 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                 scale={scale}
             />
             <MiniMap
-                grid={grid}
                 viewportBounds={viewportBounds}
                 onViewportChange={handleMiniMapViewportChange}
             />

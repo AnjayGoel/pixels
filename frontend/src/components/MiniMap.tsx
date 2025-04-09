@@ -1,12 +1,10 @@
 import { Stage, Layer, Rect } from 'react-konva';
-import { COLOR_HEX_MAP } from '../constants/colors';
 import { GRID_CONSTANTS } from '../constants/grid';
 import { Paper } from '@mui/material';
-import { useRef, useEffect, useCallback, useMemo, useState } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import Konva from 'konva';
 
 interface MiniMapProps {
-    grid: number[][];
     viewportBounds: {
         x: number;
         y: number;
@@ -17,71 +15,16 @@ interface MiniMapProps {
 }
 
 export const MiniMap: React.FC<MiniMapProps> = ({
-    grid,
     viewportBounds,
     onViewportChange,
 }) => {
     const { SIZE: GRID_SIZE } = GRID_CONSTANTS;
     const MINI_MAP_SIZE = 150;
     const MINI_PIXEL_SIZE = MINI_MAP_SIZE / GRID_SIZE;
-    const layerRef = useRef<Konva.Layer>(null);
-    const lastGridRef = useRef<string>('');
-    const lastViewportRef = useRef<string>('');
-    const UPDATE_THROTTLE = 16; // For grid updates only
+    const UPDATE_THROTTLE = 16;
     const lastUpdateTimeRef = useRef<number>(0);
     const [isDragging, setIsDragging] = useState(false);
     const viewportRef = useRef<Konva.Rect>(null);
-
-    // Memoize the grid string representation for change detection
-    const gridString = useMemo(() => JSON.stringify(grid), [grid]);
-    const viewportString = useMemo(() => JSON.stringify(viewportBounds), [viewportBounds]);
-
-    const drawMiniMap = useCallback(() => {
-        if (!layerRef.current) return;
-
-        const now = Date.now();
-        if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
-            return;
-        }
-        lastUpdateTimeRef.current = now;
-
-        if (lastGridRef.current === gridString && lastViewportRef.current === viewportString) {
-            return;
-        }
-        lastGridRef.current = gridString;
-        lastViewportRef.current = viewportString;
-
-        layerRef.current.destroyChildren();
-
-        const group = new Konva.Group();
-
-        const gridShape = new Konva.Shape({
-            sceneFunc: (context, shape) => {
-                const ctx = context._context;
-
-                for (let y = 0; y < GRID_SIZE; y++) {
-                    for (let x = 0; x < GRID_SIZE; x++) {
-                        const colorCode = grid[y][x];
-                        if (colorCode !== undefined && COLOR_HEX_MAP[colorCode]) {
-                            ctx.fillStyle = COLOR_HEX_MAP[colorCode];
-                            ctx.fillRect(x * MINI_PIXEL_SIZE, y * MINI_PIXEL_SIZE, MINI_PIXEL_SIZE, MINI_PIXEL_SIZE);
-                        }
-                    }
-                }
-            },
-            width: MINI_MAP_SIZE,
-            height: MINI_MAP_SIZE,
-            listening: false,
-        });
-
-        group.add(gridShape);
-        layerRef.current.add(group);
-        layerRef.current.batchDraw();
-    }, [grid, gridString, MINI_PIXEL_SIZE, GRID_SIZE]);
-
-    useEffect(() => {
-        drawMiniMap();
-    }, [drawMiniMap]);
 
     useEffect(() => {
         if (viewportRef.current && !isDragging) {
@@ -92,7 +35,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
         }
     }, [viewportBounds, isDragging, MINI_PIXEL_SIZE]);
 
-    const handleClick = useCallback((e: any) => {
+    const handleClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
         const now = Date.now();
         if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
             return;
@@ -112,7 +55,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
         setIsDragging(true);
     }, []);
 
-    const handleViewportDrag = useCallback((e: any) => {
+    const handleViewportDrag = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
         if (!isDragging) return;
 
         const viewport = e.target;
@@ -122,7 +65,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
         onViewportChange(x, y);
     }, [isDragging, onViewportChange, MINI_PIXEL_SIZE]);
 
-    const handleViewportDragEnd = useCallback((e: any) => {
+    const handleViewportDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
         setIsDragging(false);
 
         const viewport = e.target;
@@ -139,8 +82,16 @@ export const MiniMap: React.FC<MiniMapProps> = ({
                 height={MINI_MAP_SIZE}
                 onClick={handleClick}
             >
-                <Layer ref={layerRef}>
-                    {/* Grid is drawn dynamically in the drawMiniMap function */}
+                <Layer>
+                    <Rect
+                        x={0}
+                        y={0}
+                        width={MINI_MAP_SIZE}
+                        height={MINI_MAP_SIZE}
+                        fill="#ffffff"
+                        stroke="#000000"
+                        strokeWidth={1}
+                    />
                 </Layer>
                 <Layer>
                     <Rect
