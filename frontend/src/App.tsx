@@ -3,12 +3,13 @@ import './App.css'
 import { Grid } from './components/Grid'
 import { ColorPicker } from './components/ColorPicker'
 import { COLORS } from './constants/colors'
+import { GRID_CONSTANTS } from './constants/grid'
 import { Pixel, WebSocketUpdate, BatchUpdate } from './types'
 import { Snackbar, Alert } from '@mui/material'
 
 function App() {
   // Initialize the grid with proper typing
-  const initialGrid = Array(100).fill(null).map(() => Array(100).fill(COLORS.WHITE))
+  const initialGrid = Array(GRID_CONSTANTS.SIZE).fill(null).map(() => Array(GRID_CONSTANTS.SIZE).fill(COLORS.WHITE))
   const gridRef = useRef<number[][]>(initialGrid)
   
   // Use state only for triggering re-renders
@@ -18,7 +19,7 @@ function App() {
   const [countdown, setCountdown] = useState<number>(0)
   const [isDisabled, setIsDisabled] = useState(false)
   const lastRenderTimeRef = useRef<number>(0)
-  const UPDATE_THROTTLE = 8 // Throttle re-renders to ~120fps
+  const UPDATE_THROTTLE = GRID_CONSTANTS.UPDATE_THROTTLE
   const pendingRenderRef = useRef<boolean>(false)
 
   // Memoize the grid to prevent unnecessary re-renders
@@ -44,31 +45,30 @@ function App() {
     // Regular single pixel updates
     const pixelInterval = setInterval(() => {
       // Simulate random pixel updates
-      const x = Math.floor(Math.random() * 100)
-      const y = Math.floor(Math.random() * 100)
+      const x = Math.floor(Math.random() * GRID_CONSTANTS.SIZE)
+      const y = Math.floor(Math.random() * GRID_CONSTANTS.SIZE)
       const color = Object.values(COLORS)[Math.floor(Math.random() * Object.values(COLORS).length)]
       
       handleWebSocketMessage({
         type: 'PIXEL_UPDATE',
         data: { x, y, color }
       })
-    }, 2000) // Increased from 500ms to 2000ms
+    }, 2000)
 
     // Batch updates every 5 seconds
     const batchInterval = setInterval(() => {
       // Create a random size grid (between 3x3 and 10x10)
-      const size = Math.floor(Math.random() * 8) + 3 // Reduced from 5x5-15x15 to 3x3-10x10
-      const startX = Math.floor(Math.random() * (100 - size))
-      const startY = Math.floor(Math.random() * (100 - size))
+      const size = Math.floor(Math.random() * 8) + 3
+      const startX = Math.floor(Math.random() * (GRID_CONSTANTS.SIZE - size))
+      const startY = Math.floor(Math.random() * (GRID_CONSTANTS.SIZE - size))
       
       // Create a random pattern for the batch update
       const batchGrid = Array(size).fill(null).map(() => 
         Array(size).fill(null).map(() => {
-          // Random colors with much lower probability of colored pixels
-          if (Math.random() > 0.9) { // Changed from 0.85 to 0.9 (10% chance instead of 15%)
+          if (Math.random() > 0.9) {
             return Object.values(COLORS)[Math.floor(Math.random() * Object.values(COLORS).length)]
           } else {
-            return COLORS.WHITE // Use WHITE as transparent
+            return COLORS.WHITE
           }
         })
       )
@@ -79,9 +79,8 @@ function App() {
         data: { startX, startY, grid: batchGrid }
       }
       
-      // Send the message
       handleWebSocketMessage(batchUpdateMessage)
-    }, 8000) // Increased from 5000ms to 8000ms
+    }, 8000)
 
     return () => {
       clearInterval(pixelInterval)
