@@ -133,7 +133,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
     }, [onViewportChange, MINI_PIXEL_SIZE]);
 
     return (
-        <Paper className="fixed top-4 right-4 p-2" elevation={3}>
+        <Paper className="fixed top-4 right-4 p-2 hidden sm:block" elevation={3}>
             <Stage
                 width={MINI_MAP_SIZE}
                 height={MINI_MAP_SIZE}

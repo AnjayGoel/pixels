@@ -18,9 +18,9 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
     const { SIZE: GRID_SIZE, PIXEL_SIZE, MIN_SCALE, MAX_SCALE, UPDATE_THROTTLE } = GRID_CONSTANTS;
 
     const [scale, setScale] = useState(1);
-    const [position, setPosition] = useState({ 
-        x: window.innerWidth / 2 - (GRID_SIZE * PIXEL_SIZE) / 2, 
-        y: window.innerHeight / 2 - (GRID_SIZE * PIXEL_SIZE) / 2 
+    const [position, setPosition] = useState({
+        x: window.innerWidth / 2 - (GRID_SIZE * PIXEL_SIZE) / 2,
+        y: window.innerHeight / 2 - (GRID_SIZE * PIXEL_SIZE) / 2
     });
     const stageRef = useRef<Konva.Stage>(null);
     const layerRef = useRef<Konva.Layer>(null);
@@ -33,19 +33,19 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
     // Draw the grid on a canvas for better performance
     const drawGrid = useCallback(() => {
         if (!layerRef.current) return;
-        
+
         try {
             // Clear the layer
             layerRef.current.destroyChildren();
-            
+
             // Create a single group for all pixels
             const group = new Konva.Group();
-            
+
             // Create a single shape for the entire grid
             const gridShape = new Konva.Shape({
                 sceneFunc: (context) => {
                     const ctx = context._context;
-                    
+
                     // Draw all pixels
                     for (let y = 0; y < GRID_SIZE; y++) {
                         for (let x = 0; x < GRID_SIZE; x++) {
@@ -61,7 +61,7 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                 height: GRID_SIZE * PIXEL_SIZE,
                 listening: true,
             });
-            
+
             // Add a single outline around the entire grid
             const outlineShape = new Konva.Shape({
                 sceneFunc: (context) => {
@@ -74,7 +74,7 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                 height: GRID_SIZE * PIXEL_SIZE,
                 listening: false,
             });
-            
+
             group.add(gridShape);
             group.add(outlineShape);
             layerRef.current.add(group);
@@ -131,19 +131,19 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
     useEffect(() => {
         try {
             // Set initial position to center the grid
-            setPosition({ 
-                x: window.innerWidth / 2 - (GRID_SIZE * PIXEL_SIZE) / 2, 
-                y: window.innerHeight / 2 - (GRID_SIZE * PIXEL_SIZE) / 2 
+            setPosition({
+                x: window.innerWidth / 2 - (GRID_SIZE * PIXEL_SIZE) / 2,
+                y: window.innerHeight / 2 - (GRID_SIZE * PIXEL_SIZE) / 2
             });
-            
+
             // Initial draw
             drawGrid();
-            
+
             // Force a redraw after a short delay to ensure everything is properly initialized
             const timer = setTimeout(() => {
                 drawGrid();
             }, 100);
-            
+
             return () => clearTimeout(timer);
         } catch (error) {
             console.error('Error in initial setup:', error);
@@ -158,37 +158,37 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
     // Throttled wheel handler
     const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
         e.evt.preventDefault();
-        
+
         const now = Date.now();
         if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
             return;
         }
         lastUpdateTimeRef.current = now;
-        
+
         const scaleBy = 1.1;
         const stage = e.target.getStage();
         const oldScale = stage!.scaleX();
-        
+
         // Get the pointer position relative to the stage
         const pointerPos = stage!.getPointerPosition();
         if (!pointerPos) return;
-        
+
         // Calculate the point relative to the stage's origin
         const mousePointTo = {
             x: (pointerPos.x - stage!.x()) / oldScale,
             y: (pointerPos.y - stage!.y()) / oldScale,
         };
 
-        const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, 
+        const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE,
             e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy
         ));
-        
+
         // Calculate new position to zoom towards the mouse
         const newPos = {
             x: pointerPos.x - mousePointTo.x * newScale,
             y: pointerPos.y - mousePointTo.y * newScale,
         };
-        
+
         setScale(newScale);
         setPosition(newPos);
     }, []);
@@ -205,17 +205,17 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
 
         const stage = e.target.getStage();
         const pointerPos = stage!.getPointerPosition();
-        
+
         if (!pointerPos) return;
-        
+
         // Get the stage's position
         const stageX = stage!.x();
         const stageY = stage!.y();
-        
+
         // Calculate the point relative to the stage's origin, accounting for scale
         const relativeX = (pointerPos.x - stageX) / scale;
         const relativeY = (pointerPos.y - stageY) / scale;
-        
+
         // Convert to grid coordinates
         const gridX = Math.floor(relativeX / PIXEL_SIZE);
         const gridY = Math.floor(relativeY / PIXEL_SIZE);
@@ -223,11 +223,11 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         // Only trigger update if the click is within bounds
         if (gridX >= 0 && gridX < GRID_SIZE && gridY >= 0 && gridY < GRID_SIZE) {
             onPixelPlace({ x: gridX, y: gridY, color: selectedColor });
-            
+
             // Force an immediate redraw to show the new pixel
             drawGrid();
         }
-    }, [disabled, scale, selectedColor, onPixelPlace, drawGrid, PIXEL_SIZE, GRID_SIZE]);
+    }, [disabled, scale, selectedColor, onPixelPlace, drawGrid, PIXEL_SIZE, GRID_SIZE, UPDATE_THROTTLE]);
 
     // Throttled drag end handler
     const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
@@ -236,7 +236,7 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
             return;
         }
         lastUpdateTimeRef.current = now;
-        
+
         setPosition({
             x: e.target.x(),
             y: e.target.y(),
@@ -268,16 +268,16 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
 
     const getViewportBounds = useCallback(() => {
         if (!stageRef.current) return { x: 0, y: 0, width: GRID_SIZE, height: GRID_SIZE };
-        
+
         const viewportWidth = window.innerWidth / scale;
         const viewportHeight = window.innerHeight / scale;
-        
+
         // Calculate the visible area in grid coordinates
         const visibleX = -position.x / (PIXEL_SIZE * scale);
         const visibleY = -position.y / (PIXEL_SIZE * scale);
         const visibleWidth = viewportWidth / (PIXEL_SIZE * scale);
         const visibleHeight = viewportHeight / (PIXEL_SIZE * scale);
-        
+
         return {
             x: Math.max(0, visibleX),
             y: Math.max(0, visibleY),
@@ -291,7 +291,7 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
 
     return (
         <>
-            <div 
+            <div
                 style={{
                     position: 'fixed',
                     top: 0,
