@@ -55,16 +55,16 @@ function App() {
 
     // Batch updates every 5 seconds
     const batchInterval = setInterval(() => {
-      // Create a random size grid (between 5x5 and 15x15)
-      const size = Math.floor(Math.random() * 11) + 5 // Reduced from 10x10-30x30 to 5x5-15x15
+      // Create a random size grid (between 3x3 and 10x10)
+      const size = Math.floor(Math.random() * 8) + 3 // Reduced from 5x5-15x15 to 3x3-10x10
       const startX = Math.floor(Math.random() * (100 - size))
       const startY = Math.floor(Math.random() * (100 - size))
       
       // Create a random pattern for the batch update
       const batchGrid = Array(size).fill(null).map(() => 
         Array(size).fill(null).map(() => {
-          // Random colors with lower probability of colored pixels
-          if (Math.random() > 0.7) { // Changed from 0.3 to 0.7 (30% chance instead of 70%)
+          // Random colors with much lower probability of colored pixels
+          if (Math.random() > 0.9) { // Changed from 0.85 to 0.9 (10% chance instead of 15%)
             return Object.values(COLORS)[Math.floor(Math.random() * Object.values(COLORS).length)]
           } else {
             return COLORS.WHITE // Use WHITE as transparent
@@ -80,7 +80,7 @@ function App() {
       
       // Send the message
       handleWebSocketMessage(batchUpdateMessage)
-    }, 5000) // Increased from 3000ms to 5000ms
+    }, 8000) // Increased from 5000ms to 8000ms
 
     return () => {
       clearInterval(pixelInterval)
