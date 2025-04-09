@@ -4,4 +4,5 @@ export const GRID_CONSTANTS = {
     MIN_SCALE: 0.1,
     MAX_SCALE: 25,
     UPDATE_THROTTLE: 8,
+    PIXEL_COOLDOWN_MS: 3000,
 } as const; 

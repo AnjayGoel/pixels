@@ -16,25 +16,40 @@ interface GridProps {
 
 export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, disabled }) => {
     const { SIZE: GRID_SIZE, PIXEL_SIZE, MIN_SCALE, MAX_SCALE, UPDATE_THROTTLE } = GRID_CONSTANTS;
+    const stageRef = useRef<Konva.Stage>(null);
+    const layerRef = useRef<Konva.Layer>(null);
+    const lastUpdateTimeRef = useRef<number>(0);
+    const redrawTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastDrawnGrid = useRef<string>('');
 
+    // Memoize position and scale to prevent unnecessary re-renders
     const [scale, setScale] = useState(1);
     const [position, setPosition] = useState({
         x: window.innerWidth / 2 - (GRID_SIZE * PIXEL_SIZE) / 2,
         y: window.innerHeight / 2 - (GRID_SIZE * PIXEL_SIZE) / 2
     });
-    const stageRef = useRef<Konva.Stage>(null);
-    const layerRef = useRef<Konva.Layer>(null);
-    const lastUpdateTimeRef = useRef<number>(0);
-    const redrawTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Memoize the grid string representation for change detection
+    // Memoize grid string for change detection
     const gridString = useMemo(() => JSON.stringify(grid), [grid]);
 
-    // Draw the grid on a canvas for better performance
+    // Memoize position and scale updates
+    const updatePosition = useCallback((newPosition: { x: number; y: number }) => {
+        setPosition(newPosition);
+    }, []);
+
+    const updateScale = useCallback((newScale: number) => {
+        setScale(newScale);
+    }, []);
+
+    // Memoize the draw function
     const drawGrid = useCallback(() => {
         if (!layerRef.current) return;
 
         try {
+            // Only redraw if grid has changed
+            if (gridString === lastDrawnGrid.current) return;
+            lastDrawnGrid.current = gridString;
+
             // Clear the layer
             layerRef.current.destroyChildren();
 
@@ -82,7 +97,7 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         } catch (error) {
             console.error('Error drawing grid:', error);
         }
-    }, [grid, PIXEL_SIZE, GRID_SIZE, COLOR_HEX_MAP]);
+    }, [grid, PIXEL_SIZE, GRID_SIZE, gridString]);
 
     // Debounced redraw function with error handling
     const debouncedRedraw = useCallback(() => {
@@ -98,25 +113,10 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         }, 16); // Reduced to ~30fps for stability
     }, [drawGrid]);
 
-    // Force a redraw when the grid changes
+    // Single effect for all redraw triggers
     useEffect(() => {
         debouncedRedraw();
-    }, [gridString, debouncedRedraw]);
-
-    // Redraw when grid changes
-    useEffect(() => {
-        debouncedRedraw();
-    }, [grid, debouncedRedraw]);
-
-    // Force redraw on scale changes
-    useEffect(() => {
-        debouncedRedraw();
-    }, [scale, debouncedRedraw]);
-
-    // Force redraw on position changes
-    useEffect(() => {
-        debouncedRedraw();
-    }, [position, debouncedRedraw]);
+    }, [gridString, scale, position, debouncedRedraw]);
 
     // Cleanup on unmount
     useEffect(() => {
@@ -127,35 +127,7 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         };
     }, []);
 
-    // Initial setup with error handling
-    useEffect(() => {
-        try {
-            // Set initial position to center the grid
-            setPosition({
-                x: window.innerWidth / 2 - (GRID_SIZE * PIXEL_SIZE) / 2,
-                y: window.innerHeight / 2 - (GRID_SIZE * PIXEL_SIZE) / 2
-            });
-
-            // Initial draw
-            drawGrid();
-
-            // Force a redraw after a short delay to ensure everything is properly initialized
-            const timer = setTimeout(() => {
-                drawGrid();
-            }, 100);
-
-            return () => clearTimeout(timer);
-        } catch (error) {
-            console.error('Error in initial setup:', error);
-            // Retry initialization
-            setTimeout(() => {
-                setPosition({ x: 0, y: 0 });
-                drawGrid();
-            }, 100);
-        }
-    }, []);
-
-    // Throttled wheel handler
+    // Memoize event handlers
     const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
         e.evt.preventDefault();
 
@@ -169,11 +141,9 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         const stage = e.target.getStage();
         const oldScale = stage!.scaleX();
 
-        // Get the pointer position relative to the stage
         const pointerPos = stage!.getPointerPosition();
         if (!pointerPos) return;
 
-        // Calculate the point relative to the stage's origin
         const mousePointTo = {
             x: (pointerPos.x - stage!.x()) / oldScale,
             y: (pointerPos.y - stage!.y()) / oldScale,
@@ -183,17 +153,15 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
             e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy
         ));
 
-        // Calculate new position to zoom towards the mouse
         const newPos = {
             x: pointerPos.x - mousePointTo.x * newScale,
             y: pointerPos.y - mousePointTo.y * newScale,
         };
 
-        setScale(newScale);
-        setPosition(newPos);
-    }, []);
+        updateScale(newScale);
+        updatePosition(newPos);
+    }, [updateScale, updatePosition, MIN_SCALE, MAX_SCALE, UPDATE_THROTTLE]);
 
-    // Throttled click handler
     const handleClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
         if (disabled || selectedColor === null) return;
 
@@ -208,28 +176,20 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
 
         if (!pointerPos) return;
 
-        // Get the stage's position
         const stageX = stage!.x();
         const stageY = stage!.y();
 
-        // Calculate the point relative to the stage's origin, accounting for scale
         const relativeX = (pointerPos.x - stageX) / scale;
         const relativeY = (pointerPos.y - stageY) / scale;
 
-        // Convert to grid coordinates
         const gridX = Math.floor(relativeX / PIXEL_SIZE);
         const gridY = Math.floor(relativeY / PIXEL_SIZE);
 
-        // Only trigger update if the click is within bounds
         if (gridX >= 0 && gridX < GRID_SIZE && gridY >= 0 && gridY < GRID_SIZE) {
             onPixelPlace({ x: gridX, y: gridY, color: selectedColor });
-
-            // Force an immediate redraw to show the new pixel
-            drawGrid();
         }
-    }, [disabled, scale, selectedColor, onPixelPlace, drawGrid, PIXEL_SIZE, GRID_SIZE, UPDATE_THROTTLE]);
+    }, [disabled, scale, selectedColor, onPixelPlace, PIXEL_SIZE, GRID_SIZE, UPDATE_THROTTLE]);
 
-    // Throttled drag end handler
     const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
         const now = Date.now();
         if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
@@ -237,42 +197,42 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
         }
         lastUpdateTimeRef.current = now;
 
-        setPosition({
+        updatePosition({
             x: e.target.x(),
             y: e.target.y(),
         });
-    }, []);
+    }, [updatePosition, UPDATE_THROTTLE]);
 
+    // Memoize zoom controls
     const handleZoomIn = useCallback(() => {
         const newScale = Math.min(MAX_SCALE, scale * 1.5);
-        setScale(newScale);
-    }, [scale]);
+        updateScale(newScale);
+    }, [scale, updateScale, MAX_SCALE]);
 
     const handleZoomOut = useCallback(() => {
         const newScale = Math.max(MIN_SCALE, scale / 1.5);
-        setScale(newScale);
-    }, [scale]);
+        updateScale(newScale);
+    }, [scale, updateScale, MIN_SCALE]);
 
     const handleReset = useCallback(() => {
-        setScale(1);
-        setPosition({ x: 0, y: 0 });
-    }, []);
+        updateScale(1);
+        updatePosition({ x: 0, y: 0 });
+    }, [updateScale, updatePosition]);
 
     const handleMiniMapViewportChange = useCallback((x: number, y: number) => {
-        // Convert grid coordinates to stage coordinates
-        setPosition({
+        updatePosition({
             x: -x * PIXEL_SIZE * scale,
             y: -y * PIXEL_SIZE * scale,
         });
-    }, [scale, PIXEL_SIZE]);
+    }, [scale, updatePosition, PIXEL_SIZE]);
 
-    const getViewportBounds = useCallback(() => {
+    // Memoize viewport bounds
+    const viewportBounds = useMemo(() => {
         if (!stageRef.current) return { x: 0, y: 0, width: GRID_SIZE, height: GRID_SIZE };
 
         const viewportWidth = window.innerWidth / scale;
         const viewportHeight = window.innerHeight / scale;
 
-        // Calculate the visible area in grid coordinates
         const visibleX = -position.x / (PIXEL_SIZE * scale);
         const visibleY = -position.y / (PIXEL_SIZE * scale);
         const visibleWidth = viewportWidth / (PIXEL_SIZE * scale);
@@ -284,10 +244,8 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
             width: Math.min(GRID_SIZE - visibleX, visibleWidth),
             height: Math.min(GRID_SIZE - visibleY, visibleHeight),
         };
-    }, [position, scale]);
+    }, [position, scale, PIXEL_SIZE, GRID_SIZE]);
 
-    // Memoize viewport bounds to prevent unnecessary re-renders
-    const viewportBounds = useMemo(() => getViewportBounds(), [getViewportBounds]);
 
     return (
         <>
@@ -300,7 +258,7 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                     height: '100%',
                     background: 'white',
                     overflow: 'hidden',
-                    touchAction: 'none' // Prevent default touch behavior
+                    touchAction: 'none'
                 }}
             >
                 <Stage
@@ -309,7 +267,7 @@ export const Grid: React.FC<GridProps> = ({ grid, selectedColor, onPixelPlace, d
                     height={window.innerHeight}
                     onWheel={handleWheel}
                     onClick={handleClick}
-                    onTap={handleClick} // Add tap handler for touch devices
+                    onTap={handleClick}
                     scaleX={scale}
                     scaleY={scale}
                     x={position.x}

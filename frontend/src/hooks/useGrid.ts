@@ -9,7 +9,6 @@ export function useGrid() {
         .map(() => Array(GRID_CONSTANTS.SIZE).fill(COLORS.WHITE));
     
     const gridRef = useRef<number[][]>(initialGrid);
-    const [gridVersion, setGridVersion] = useState(0);
     const [lastPlacedTime, setLastPlacedTime] = useState<number | null>(null);
     const [countdown, setCountdown] = useState<number>(0);
     const [isDisabled, setIsDisabled] = useState(false);
@@ -20,7 +19,6 @@ export function useGrid() {
         if (update.type === 'PIXEL_UPDATE') {
             const pixel = update.data as Pixel;
             gridRef.current[pixel.y][pixel.x] = pixel.color;
-            setGridVersion(v => v + 1);
         } else if (update.type === 'BATCH_UPDATE') {
             const { startX, startY, grid } = update.data as BatchUpdate;
             for (let y = 0; y < grid.length; y++) {
@@ -34,7 +32,6 @@ export function useGrid() {
                     }
                 }
             }
-            setGridVersion(v => v + 1);
         }
     }, []);
 
@@ -56,7 +53,7 @@ export function useGrid() {
         }
 
         const interval = setInterval(() => {
-            const timeLeft = Math.max(0, 3 - (Date.now() - lastPlacedTime) / 1000);
+            const timeLeft = Math.max(0, GRID_CONSTANTS.PIXEL_COOLDOWN_MS / 1000 - (Date.now() - lastPlacedTime) / 1000);
             setCountdown(Math.ceil(timeLeft));
             setIsDisabled(timeLeft > 0);
         }, 100);
@@ -65,7 +62,7 @@ export function useGrid() {
     }, [lastPlacedTime]);
 
     const handlePixelPlace = useCallback((pixel: Pixel) => {
-        if (lastPlacedTime && Date.now() - lastPlacedTime < 3000) {
+        if (lastPlacedTime && Date.now() - lastPlacedTime < GRID_CONSTANTS.PIXEL_COOLDOWN_MS) {
             return;
         }
 
