@@ -59,9 +59,11 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
         // Set new timeout for rendering
         renderTimeoutRef.current = setTimeout(() => {
             const group = new Konva.Group();
+            const copy = [...pendingPixelsRef.current];
+            pendingPixelsRef.current = [];
 
             // Process all pending pixels
-            for (const pixel of pendingPixelsRef.current) {
+            for (const pixel of copy) {
                 const rect = new Konva.Rect({
                     x: pixel.x * PIXEL_SIZE,
                     y: pixel.y * PIXEL_SIZE,
