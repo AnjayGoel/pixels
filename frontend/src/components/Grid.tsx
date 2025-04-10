@@ -1,4 +1,4 @@
-import { Stage, Layer } from 'react-konva';
+import { Stage, Layer, Shape } from 'react-konva';
 import { Pixel } from '../types';
 import { COLOR_HEX_MAP } from '../constants/colors';
 import { GRID_CONSTANTS } from '../constants/grid';
@@ -260,7 +260,18 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
                         }
                     }}
                 >
-                    <Layer ref={layerRef} />
+                    <Layer ref={layerRef}>
+                        {/* Grid boundary */}
+                        <Shape
+                            sceneFunc={(context) => {
+                                context.beginPath();
+                                context.rect(0, 0, GRID_SIZE * PIXEL_SIZE, GRID_SIZE * PIXEL_SIZE);
+                                context.strokeStyle = 'black';
+                                context.lineWidth = 1;
+                                context.stroke();
+                            }}
+                        />
+                    </Layer>
                 </Stage>
             </div>
             <ZoomControls
