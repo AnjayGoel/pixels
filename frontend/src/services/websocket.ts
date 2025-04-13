@@ -1,4 +1,4 @@
-import { WebSocketUpdate, Pixel, BatchUpdate } from '../types';
+import { WebSocketUpdate, Pixel } from '../types';
 import { COLORS } from '../constants/colors';
 import { GRID_CONSTANTS } from '../constants/grid';
 
@@ -26,7 +26,7 @@ export class GridWebSocketService {
         if (!this.updateHandler) return;
         this.updateHandler({
             type: 'PIXEL_UPDATE',
-            data: pixel
+            data: [pixel]
         });
     }
 
@@ -46,27 +46,34 @@ export class GridWebSocketService {
         this.pixelInterval = setInterval(() => {
             if (!this.updateHandler) return;
 
-            const x = Math.floor(Math.random() * GRID_CONSTANTS.SIZE);
-            const y = Math.floor(Math.random() * GRID_CONSTANTS.SIZE);
-            const color = Object.values(COLORS)[Math.floor(Math.random() * Object.values(COLORS).length)];
+            // Generate multiple pixels at once
+            const numPixels = Math.floor(Math.random() * 5) + 3; // 3-7 pixels per update
+            const pixels: Pixel[] = [];
+            
+            for (let i = 0; i < numPixels; i++) {
+                const x = Math.floor(Math.random() * GRID_CONSTANTS.SIZE);
+                const y = Math.floor(Math.random() * GRID_CONSTANTS.SIZE);
+                const color = Object.values(COLORS)[Math.floor(Math.random() * Object.values(COLORS).length)];
+                pixels.push({ x, y, color });
+            }
 
             this.updateHandler({
                 type: 'PIXEL_UPDATE',
-                data: { x, y, color }
+                data: pixels
             });
-        }, 2000);
+        }, 1000); // Update every second
 
         // Batch updates
         this.batchInterval = setInterval(() => {
             if (!this.updateHandler) return;
 
-            const size = Math.floor(Math.random() * 8) + 3;
+            const size = Math.floor(Math.random() * 15) + 10; // 10-24 size
             const startX = Math.floor(Math.random() * (GRID_CONSTANTS.SIZE - size));
             const startY = Math.floor(Math.random() * (GRID_CONSTANTS.SIZE - size));
 
             const batchGrid = Array(size).fill(null).map(() =>
                 Array(size).fill(null).map(() => {
-                    if (Math.random() > 0.9) {
+                    if (Math.random() > 0.7) { // Increased density from 0.9 to 0.7
                         return Object.values(COLORS)[Math.floor(Math.random() * Object.values(COLORS).length)];
                     } else {
                         return COLORS.WHITE;
@@ -78,6 +85,6 @@ export class GridWebSocketService {
                 type: 'BATCH_UPDATE',
                 data: { startX, startY, grid: batchGrid }
             });
-        }, 8000);
+        }, 3000); // Update every 3 seconds
     }
 } 

@@ -4,11 +4,6 @@ export interface Pixel {
     color: number;
 }
 
-export interface GridState {
-    grid: number[][];
-    lastUpdate: number | null;
-}
-
 export interface BatchUpdate {
     startX: number;
     startY: number;
@@ -17,5 +12,5 @@ export interface BatchUpdate {
 
 export interface WebSocketUpdate {
     type: 'PIXEL_UPDATE' | 'GRID_REFRESH' | 'BATCH_UPDATE';
-    data: Pixel | number[][] | BatchUpdate;
+    data: Pixel[] | number[][] | BatchUpdate;
 } 
