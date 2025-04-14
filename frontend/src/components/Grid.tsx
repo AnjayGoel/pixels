@@ -1,9 +1,7 @@
-import { Stage, Layer, Shape } from 'react-konva';
+import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { Pixel } from '../types';
 import { COLOR_HEX_MAP } from '../constants/colors';
 import { GRID_CONSTANTS } from '../constants/grid';
-import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
-import Konva from 'konva';
 import { ZoomControls } from './ZoomControls';
 import { MiniMap } from './MiniMap';
 import { usePixelStream } from '../contexts/PixelStreamContext';
@@ -17,24 +15,18 @@ interface GridProps {
 export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlace }) => {
     const { SIZE: GRID_SIZE, PIXEL_SIZE, MIN_SCALE, MAX_SCALE, UPDATE_THROTTLE } = GRID_CONSTANTS;
     
-    // Refs to konva stage and layer
-    const stageRef = useRef<Konva.Stage>(null);
-    const layerRef = useRef<Konva.Layer>(null);
-
-
+    const canvasRef = useRef<HTMLCanvasElement>(null);
     const lastUpdateTimeRef = useRef<number>(0);
     const pendingPixelsRef = useRef<Pixel[]>([]);
     const renderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const { placePixel } = usePixelStream();
 
-    // Memoize position and scale to prevent unnecessary re-renders
     const [scale, setScale] = useState(1);
     const [position, setPosition] = useState({
         x: window.innerWidth / 2 - (GRID_SIZE * PIXEL_SIZE) / 2,
         y: window.innerHeight / 2 - (GRID_SIZE * PIXEL_SIZE) / 2
     });
 
-    // Memoize position and scale updates
     const updatePosition = useCallback((newPosition: { x: number; y: number }) => {
         setPosition(newPosition);
     }, []);
@@ -45,8 +37,8 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
 
     // Handle pixel updates with debouncing
     const handlePixelUpdates = useCallback((pixels: Pixel[]) => {
-        const layer = layerRef.current;
-        if (!layer) return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
 
         // Add new pixels to pending list
         pendingPixelsRef.current.push(...pixels);
@@ -58,34 +50,31 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
 
         // Set new timeout for rendering
         renderTimeoutRef.current = setTimeout(() => {
-            const group = new Konva.Group();
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
             const copy = [...pendingPixelsRef.current];
             pendingPixelsRef.current = [];
 
             // Process all pending pixels
             for (const pixel of copy) {
-                const rect = new Konva.Rect({
-                    x: pixel.x * PIXEL_SIZE,
-                    y: pixel.y * PIXEL_SIZE,
-                    width: PIXEL_SIZE,
-                    height: PIXEL_SIZE,
-                    fill: COLOR_HEX_MAP[pixel.color],
-                    listening: false
-                });
-
-                group.add(rect);
+                ctx.fillStyle = COLOR_HEX_MAP[pixel.color];
+                ctx.fillRect(
+                    pixel.x * PIXEL_SIZE,
+                    pixel.y * PIXEL_SIZE,
+                    PIXEL_SIZE,
+                    PIXEL_SIZE
+                );
             }
 
-            // Clear pending pixels
-            pendingPixelsRef.current = [];
-
-            // Add group to layer and draw
-            if (group.children.length > 0) {
-                layer.add(group);
-                layer.batchDraw();
-            }
+            // Redraw grid boundary
+            ctx.beginPath();
+            ctx.rect(0, 0, GRID_SIZE * PIXEL_SIZE, GRID_SIZE * PIXEL_SIZE);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 1;
+            ctx.stroke();
         }, 16); // ~60fps
-    }, [PIXEL_SIZE]);
+    }, [PIXEL_SIZE, GRID_SIZE]);
 
     // Subscribe to pixel stream
     const { subscribe, unsubscribe } = usePixelStream();
@@ -103,9 +92,9 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
         };
     }, []);
 
-    // Memoize event handlers
-    const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
-        e.evt.preventDefault();
+    // Handle wheel events for zooming
+    const handleWheel = useCallback((e: WheelEvent) => {
+        e.preventDefault();
 
         const now = Date.now();
         if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
@@ -114,29 +103,28 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
         lastUpdateTimeRef.current = now;
 
         const scaleBy = 1.1;
-        const stage = e.target.getStage();
-        const oldScale = stage!.scaleX();
+        const oldScale = scale;
 
-        const pointerPos = stage!.getPointerPosition();
-        if (!pointerPos) return;
+        const mouseX = e.clientX;
+        const mouseY = e.clientY;
 
         const mousePointTo = {
-            x: (pointerPos.x - stage!.x()) / oldScale,
-            y: (pointerPos.y - stage!.y()) / oldScale,
+            x: (mouseX - position.x) / oldScale,
+            y: (mouseY - position.y) / oldScale,
         };
 
         const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE,
-            e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy
+            e.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy
         ));
 
         const newPos = {
-            x: pointerPos.x - mousePointTo.x * newScale,
-            y: pointerPos.y - mousePointTo.y * newScale,
+            x: mouseX - mousePointTo.x * newScale,
+            y: mouseY - mousePointTo.y * newScale,
         };
 
         updateScale(newScale);
         updatePosition(newPos);
-    }, [updateScale, updatePosition, MIN_SCALE, MAX_SCALE, UPDATE_THROTTLE]);
+    }, [scale, position, updateScale, updatePosition, MIN_SCALE, MAX_SCALE, UPDATE_THROTTLE]);
 
     const handlePixelPlace = useCallback((x: number, y: number) => {
         if (disabled || selectedColor === null) return;
@@ -145,34 +133,53 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
         onPixelPlace?.();
     }, [selectedColor, disabled, placePixel, onPixelPlace]);
 
-    const handleClick = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const handleClick = useCallback((e: MouseEvent) => {
         if (disabled) return;
-        const stage = e.target.getStage();
-        if (!stage) return;
         
-        const point = stage.getPointerPosition();
-        if (!point) return;
-        
-        const gridX = Math.floor((point.x - position.x) / (PIXEL_SIZE * scale));
-        const gridY = Math.floor((point.y - position.y) / (PIXEL_SIZE * scale));
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // Calculate the grid coordinates
+        const gridX = Math.floor((e.clientX / scale - position.x / scale) / PIXEL_SIZE);
+        const gridY = Math.floor((e.clientY / scale - position.y / scale) / PIXEL_SIZE);
         
         if (gridX >= 0 && gridX < GRID_SIZE && gridY >= 0 && gridY < GRID_SIZE) {
             handlePixelPlace(gridX, gridY);
         }
     }, [disabled, scale, position, PIXEL_SIZE, GRID_SIZE, handlePixelPlace]);
 
-    const handleDragEnd = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
+    // Handle drag events
+    const isDragging = useRef(false);
+    const lastPos = useRef({ x: 0, y: 0 });
+
+    const handleMouseDown = useCallback((e: MouseEvent) => {
+        isDragging.current = true;
+        lastPos.current = { x: e.clientX, y: e.clientY };
+    }, []);
+
+    const handleMouseMove = useCallback((e: MouseEvent) => {
+        if (!isDragging.current) return;
+
         const now = Date.now();
         if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
             return;
         }
         lastUpdateTimeRef.current = now;
 
+        const dx = e.clientX - lastPos.current.x;
+        const dy = e.clientY - lastPos.current.y;
+
         updatePosition({
-            x: e.target.x(),
-            y: e.target.y(),
+            x: position.x + dx,
+            y: position.y + dy,
         });
-    }, [updatePosition, UPDATE_THROTTLE]);
+
+        lastPos.current = { x: e.clientX, y: e.clientY };
+    }, [position, updatePosition, UPDATE_THROTTLE]);
+
+    const handleMouseUp = useCallback(() => {
+        isDragging.current = false;
+    }, []);
 
     // Memoize zoom controls
     const handleZoomIn = useCallback(() => {
@@ -199,8 +206,6 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
 
     // Memoize viewport bounds
     const viewportBounds = useMemo(() => {
-        if (!stageRef.current) return { x: 0, y: 0, width: GRID_SIZE, height: GRID_SIZE };
-
         const viewportWidth = window.innerWidth / scale;
         const viewportHeight = window.innerHeight / scale;
 
@@ -217,6 +222,45 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
         };
     }, [position, scale, PIXEL_SIZE, GRID_SIZE]);
 
+    // Set up event listeners
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // Draw grid boundary
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.beginPath();
+            ctx.rect(0, 0, GRID_SIZE * PIXEL_SIZE, GRID_SIZE * PIXEL_SIZE);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        canvas.addEventListener('wheel', handleWheel);
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('click', handleClick);
+
+        return () => {
+            canvas.removeEventListener('wheel', handleWheel);
+            canvas.removeEventListener('mousedown', handleMouseDown);
+            canvas.removeEventListener('mousemove', handleMouseMove);
+            canvas.removeEventListener('mouseup', handleMouseUp);
+            canvas.removeEventListener('click', handleClick);
+        };
+    }, [handleWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleClick, GRID_SIZE, PIXEL_SIZE]);
+
+    // Set cursor style
+    useEffect(() => {
+        if (selectedColor !== null) {
+            document.body.style.cursor = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="8" y="8" width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}" stroke="black" stroke-width="1"/></svg>') 16 8, auto`;
+        } else {
+            document.body.style.cursor = 'default';
+        }
+    }, [selectedColor]);
+
     return (
         <>
             <div
@@ -231,61 +275,28 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
                     touchAction: 'none'
                 }}
             >
-                <Stage
-                    ref={stageRef}
-                    width={window.innerWidth}
-                    height={window.innerHeight}
-                    onWheel={handleWheel}
-                    onClick={handleClick}
-                    onTap={handleClick}
-                    scaleX={scale}
-                    scaleY={scale}
-                    x={position.x}
-                    y={position.y}
-                    draggable
-                    onDragEnd={handleDragEnd}
-                    onMouseEnter={() => {
-                        if (selectedColor !== null) {
-                            document.body.style.cursor = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="8" y="8" width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}" stroke="black" stroke-width="1"/></svg>') 16 8, auto`;
-                        } else {
-                            document.body.style.cursor = 'pointer';
-                        }
+                <canvas
+                    ref={canvasRef}
+                    width={GRID_SIZE * PIXEL_SIZE}
+                    height={GRID_SIZE * PIXEL_SIZE}
+                    style={{
+                        position: 'absolute',
+                        transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+                        transformOrigin: '0 0',
+                        imageRendering: 'pixelated'
                     }}
-                    onMouseLeave={() => {
-                        document.body.style.cursor = 'default';
-                    }}
-                    onMouseMove={() => {
-                        if (selectedColor !== null) {
-                            document.body.style.cursor = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect x="8" y="8" width="16" height="16" fill="${COLOR_HEX_MAP[selectedColor].replace('#', '%23')}" stroke="black" stroke-width="1"/></svg>') 16 8, auto`;
-                        } else {
-                            document.body.style.cursor = 'pointer';
-                        }
-                    }}
-                >
-                    <Layer ref={layerRef}>
-                        {/* Grid boundary */}
-                        <Shape
-                            sceneFunc={(context) => {
-                                context.beginPath();
-                                context.rect(0, 0, GRID_SIZE * PIXEL_SIZE, GRID_SIZE * PIXEL_SIZE);
-                                context.strokeStyle = 'black';
-                                context.lineWidth = 1;
-                                context.stroke();
-                            }}
-                        />
-                    </Layer>
-                </Stage>
+                />
+                <ZoomControls
+                    scale={scale}
+                    onZoomIn={handleZoomIn}
+                    onZoomOut={handleZoomOut}
+                    onReset={handleReset}
+                />
+                <MiniMap
+                    viewportBounds={viewportBounds}
+                    onViewportChange={handleMiniMapViewportChange}
+                />
             </div>
-            <ZoomControls
-                onZoomIn={handleZoomIn}
-                onZoomOut={handleZoomOut}
-                onReset={handleReset}
-                scale={scale}
-            />
-            <MiniMap
-                viewportBounds={viewportBounds}
-                onViewportChange={handleMiniMapViewportChange}
-            />
         </>
     );
 };

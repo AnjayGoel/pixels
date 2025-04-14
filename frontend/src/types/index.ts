@@ -11,6 +11,6 @@ export interface BatchUpdate {
 }
 
 export interface WebSocketUpdate {
-    type: 'PIXEL_UPDATE' | 'GRID_REFRESH' | 'BATCH_UPDATE';
-    data: Pixel[] | number[][] | BatchUpdate;
+    type: 'PIXEL_UPDATE' | 'BATCH_UPDATE';
+    data: Pixel[]  | BatchUpdate;
 } 
