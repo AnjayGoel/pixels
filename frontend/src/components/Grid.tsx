@@ -155,6 +155,7 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
     const handleMouseDown = useCallback((e: MouseEvent) => {
         isDragging.current = true;
         lastPos.current = { x: e.clientX, y: e.clientY };
+        e.preventDefault();
     }, []);
 
     const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -175,10 +176,47 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
         });
 
         lastPos.current = { x: e.clientX, y: e.clientY };
+        e.preventDefault();
     }, [position, updatePosition, UPDATE_THROTTLE]);
 
-    const handleMouseUp = useCallback(() => {
+    const handleMouseUp = useCallback((e: MouseEvent) => {
         isDragging.current = false;
+        e.preventDefault();
+    }, []);
+
+    // Add touch event handlers
+    const handleTouchStart = useCallback((e: TouchEvent) => {
+        if (e.touches.length === 1) {
+            isDragging.current = true;
+            lastPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            e.preventDefault();
+        }
+    }, []);
+
+    const handleTouchMove = useCallback((e: TouchEvent) => {
+        if (!isDragging.current || e.touches.length !== 1) return;
+
+        const now = Date.now();
+        if (now - lastUpdateTimeRef.current < UPDATE_THROTTLE) {
+            return;
+        }
+        lastUpdateTimeRef.current = now;
+
+        const dx = e.touches[0].clientX - lastPos.current.x;
+        const dy = e.touches[0].clientY - lastPos.current.y;
+
+        updatePosition({
+            x: position.x + dx,
+            y: position.y + dy,
+        });
+
+        lastPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        e.preventDefault();
+    }, [position, updatePosition, UPDATE_THROTTLE]);
+
+    const handleTouchEnd = useCallback((e: TouchEvent) => {
+        isDragging.current = false;
+        e.preventDefault();
     }, []);
 
     // Memoize zoom controls
@@ -242,6 +280,9 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
         canvas.addEventListener('mousemove', handleMouseMove);
         canvas.addEventListener('mouseup', handleMouseUp);
         canvas.addEventListener('click', handleClick);
+        canvas.addEventListener('touchstart', handleTouchStart);
+        canvas.addEventListener('touchmove', handleTouchMove);
+        canvas.addEventListener('touchend', handleTouchEnd);
 
         return () => {
             canvas.removeEventListener('wheel', handleWheel);
@@ -249,8 +290,11 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
             canvas.removeEventListener('mousemove', handleMouseMove);
             canvas.removeEventListener('mouseup', handleMouseUp);
             canvas.removeEventListener('click', handleClick);
+            canvas.removeEventListener('touchstart', handleTouchStart);
+            canvas.removeEventListener('touchmove', handleTouchMove);
+            canvas.removeEventListener('touchend', handleTouchEnd);
         };
-    }, [handleWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleClick, GRID_SIZE, PIXEL_SIZE]);
+    }, [handleWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleClick, handleTouchStart, handleTouchMove, handleTouchEnd, GRID_SIZE, PIXEL_SIZE]);
 
     // Set cursor style
     useEffect(() => {
