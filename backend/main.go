@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
@@ -41,9 +41,21 @@ type BatchUpdate struct {
 	Grid   [][]int `json:"grid"`
 }
 
-type WebSocketMessage struct {
+type ServerUpdatePacket struct {
 	Type string      `json:"type"`
 	Data interface{} `json:"data"`
+}
+
+type ClientUpdatePacket struct {
+	Type string `json:"type"`
+	Data Pixel  `json:"data"`
+}
+
+type Grid struct {
+	mu    sync.RWMutex
+	grid  [][]int
+	size  int
+	conns map[*websocket.Conn]bool
 }
 
 func initRedis() {
@@ -115,76 +127,85 @@ func fetchRegion(x1, y1, x2, y2 int) (*BatchUpdate, error) {
 	}, nil
 }
 
-func handleWebSocket(w http.ResponseWriter, r *http.Request) {
+func NewGrid(size int) *Grid {
+	grid := make([][]int, size)
+	for i := range grid {
+		grid[i] = make([]int, size)
+	}
+	return &Grid{
+		grid:  grid,
+		size:  size,
+		conns: make(map[*websocket.Conn]bool),
+	}
+}
+
+func (g *Grid) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("Upgrade error:", err)
+		log.Println("Failed to upgrade connection:", err)
 		return
 	}
 	defer conn.Close()
 
-	// Subscribe to Redis channel for updates
-	pubsub := redisClient.Subscribe(context.Background(), "pixel_updates")
-	defer pubsub.Close()
+	// Add connection to the list
+	g.mu.Lock()
+	g.conns[conn] = true
+	g.mu.Unlock()
 
-	// Channel to receive Redis messages
-	ch := pubsub.Channel()
+	// Send initial grid state
+	initialUpdate := ServerUpdatePacket{
+		Type: "BATCH_UPDATE",
+		Data: BatchUpdate{
+			StartX: 0,
+			StartY: 0,
+			Grid:   g.grid,
+		},
+	}
+	if err := conn.WriteJSON(initialUpdate); err != nil {
+		log.Println("Failed to send initial grid state:", err)
+		return
+	}
 
-	// Handle incoming messages from client
-	go func() {
-		for {
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				log.Println("Read error:", err)
-				return
-			}
+	// Handle incoming messages
+	for {
+		var packet ClientUpdatePacket
+		if err := conn.ReadJSON(&packet); err != nil {
+			log.Println("Failed to read message:", err)
+			break
+		}
 
-			var wsMsg WebSocketMessage
-			if err := json.Unmarshal(message, &wsMsg); err != nil {
-				log.Println("JSON unmarshal error:", err)
-				continue
-			}
+		if packet.Type == "UPDATE" {
+			pixel := packet.Data
+			if pixel.X >= 0 && pixel.X < g.size && pixel.Y >= 0 && pixel.Y < g.size {
+				g.mu.Lock()
+				g.grid[pixel.Y][pixel.X] = pixel.Color
+				g.mu.Unlock()
 
-			switch wsMsg.Type {
-			case "PIXEL_UPDATE":
-				var pixel Pixel
-				if err := json.Unmarshal(message, &pixel); err != nil {
-					log.Println("Pixel unmarshal error:", err)
-					continue
+				// Broadcast the update to all connected clients
+				update := ServerUpdatePacket{
+					Type: "LIVE_UPDATE",
+					Data: []Pixel{pixel},
 				}
-
-				if err := updatePixel(pixel.X, pixel.Y, pixel.Color); err != nil {
-					log.Println("Update error:", err)
-					continue
-				}
-
-				// Publish update to Redis channel
-				redisClient.Publish(context.Background(), "pixel_updates", message)
+				g.broadcast(update)
 			}
 		}
-	}()
+	}
 
-	// Forward Redis messages to WebSocket
-	for msg := range ch {
-		var pixel Pixel
-		if err := json.Unmarshal([]byte(msg.Payload), &pixel); err != nil {
-			continue
-		}
+	// Remove connection when done
+	g.mu.Lock()
+	delete(g.conns, conn)
+	g.mu.Unlock()
+}
 
-		wsMsg := WebSocketMessage{
-			Type: "PIXEL_UPDATE",
-			Data: pixel,
-		}
+func (g *Grid) broadcast(update ServerUpdatePacket) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
 
-		message, err := json.Marshal(wsMsg)
-		if err != nil {
-			log.Println("Marshal error:", err)
-			continue
-		}
-
-		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
-			log.Println("Write error:", err)
-			return
+	for conn := range g.conns {
+		if err := conn.WriteJSON(update); err != nil {
+			log.Println("Failed to broadcast update:", err)
+			conn.Close()
+			delete(g.conns, conn)
 		}
 	}
 }
@@ -192,41 +213,9 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 func main() {
 	initRedis()
 
-	// Add HTTP endpoints for batch operations
-	http.HandleFunc("/ws", handleWebSocket)
-	http.HandleFunc("/update", func(w http.ResponseWriter, r *http.Request) {
-		var pixel Pixel
-		if err := json.NewDecoder(r.Body).Decode(&pixel); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err := updatePixel(pixel.X, pixel.Y, pixel.Color); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	})
+	grid := NewGrid(500)
 
-	http.HandleFunc("/fetch", func(w http.ResponseWriter, r *http.Request) {
-		query := r.URL.Query()
-		x1, _ := strconv.Atoi(query.Get("x1"))
-		y1, _ := strconv.Atoi(query.Get("y1"))
-		x2, _ := strconv.Atoi(query.Get("x2"))
-		y2, _ := strconv.Atoi(query.Get("y2"))
-
-		batchUpdate, err := fetchRegion(x1, y1, x2, y2)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		wsMsg := WebSocketMessage{
-			Type: "BATCH_UPDATE",
-			Data: batchUpdate,
-		}
-
-		json.NewEncoder(w).Encode(wsMsg)
-	})
+	http.HandleFunc("/ws", grid.handleWebSocket)
 
 	log.Println("Server starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
