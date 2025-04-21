@@ -4,12 +4,17 @@ import (
 	"context"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"pixels/internal/types"
 
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+)
+
+const (
+	STREAM_KEY = "pixel_updates"
 )
 
 var Client *redis.Client
@@ -41,9 +46,6 @@ func init() {
 		emptyGrid := strings.Repeat("a", types.GRID_WIDTH*types.GRID_HEIGHT)
 		Client.Set(context.Background(), types.GRID_KEY, emptyGrid, 0)
 	}
-
-	// Enable keyspace notifications for string operations
-	Client.ConfigSet(context.Background(), "notify-keyspace-events", "Ks")
 }
 
 // colorToChar converts a color value (0-16) to a single character
@@ -63,8 +65,58 @@ func GetGridIndex(x, y int) int {
 func UpdatePixel(x, y, color int) error {
 	index := GetGridIndex(x, y)
 	char := ColorToChar(color)
+
+	// Update the grid
 	_, err := Client.SetRange(context.Background(), types.GRID_KEY, int64(index), string(char)).Result()
+	if err != nil {
+		return err
+	}
+
+	// Add the update to the stream
+	_, err = Client.XAdd(context.Background(), &redis.XAddArgs{
+		Stream: STREAM_KEY,
+		Values: map[string]interface{}{
+			"x":     x,
+			"y":     y,
+			"color": color,
+		},
+	}).Result()
 	return err
+}
+
+func StartKeyListener(broadcastFunc func(types.ServerUpdatePacket)) {
+	// Start from the beginning of the stream
+	lastID := "0"
+
+	for {
+		// Read new messages from the stream
+		messages, err := Client.XRead(context.Background(), &redis.XReadArgs{
+			Streams: []string{STREAM_KEY, lastID},
+			Count:   100,
+			Block:   0,
+		}).Result()
+		if err != nil {
+			log.Println("Error reading from stream:", err)
+			continue
+		}
+
+		for _, message := range messages[0].Messages {
+			// Update the last ID
+			lastID = message.ID
+
+			// Extract the update data
+			x, _ := strconv.Atoi(message.Values["x"].(string))
+			y, _ := strconv.Atoi(message.Values["y"].(string))
+			color, _ := strconv.Atoi(message.Values["color"].(string))
+
+			// Broadcast the update
+			update := types.ServerUpdatePacket{
+				Type: "LIVE_UPDATE",
+				Data: []types.Pixel{{X: x, Y: y, Color: color}},
+			}
+			broadcastFunc(update)
+		}
+	}
 }
 
 func GetGrid() ([][]int, error) {
@@ -83,35 +135,4 @@ func GetGrid() ([][]int, error) {
 		}
 	}
 	return grid, nil
-}
-
-func StartKeyListener(broadcastFunc func(types.ServerUpdatePacket)) {
-	pubsub := Client.Subscribe(context.Background(), "__keyspace@0__:"+types.GRID_KEY)
-	defer pubsub.Close()
-
-	ch := pubsub.Channel()
-	for msg := range ch {
-		if msg.Payload == "setrange" {
-			// Get the updated grid
-			grid, err := GetGrid()
-			if err != nil {
-				log.Println("Error getting grid after update:", err)
-				continue
-			}
-
-			// Find the changed pixel
-			// Note: This is a simplified approach. In a real implementation,
-			// you might want to track the last update or use a more efficient method
-			for y := 0; y < types.GRID_HEIGHT; y++ {
-				for x := 0; x < types.GRID_WIDTH; x++ {
-					// Broadcast the update
-					update := types.ServerUpdatePacket{
-						Type: "LIVE_UPDATE",
-						Data: []types.Pixel{{X: x, Y: y, Color: grid[y][x]}},
-					}
-					broadcastFunc(update)
-				}
-			}
-		}
-	}
 }
