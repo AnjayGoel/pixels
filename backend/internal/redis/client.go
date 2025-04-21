@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"os"
 	"strconv"
@@ -14,7 +15,7 @@ import (
 )
 
 const (
-	STREAM_KEY = "pixel_updates"
+	CHANNEL_NAME = "pixel_updates"
 )
 
 var Client *redis.Client
@@ -43,7 +44,7 @@ func init() {
 	}
 	if exists == 0 {
 		// Create empty grid filled with 'a's (color 0)
-		emptyGrid := strings.Repeat("a", types.GRID_WIDTH*types.GRID_HEIGHT)
+		emptyGrid := strings.Repeat("b", types.GRID_WIDTH*types.GRID_HEIGHT)
 		Client.Set(context.Background(), types.GRID_KEY, emptyGrid, 0)
 	}
 }
@@ -72,50 +73,40 @@ func UpdatePixel(x, y, color int) error {
 		return err
 	}
 
-	// Add the update to the stream
-	_, err = Client.XAdd(context.Background(), &redis.XAddArgs{
-		Stream: STREAM_KEY,
-		Values: map[string]interface{}{
-			"x":     x,
-			"y":     y,
-			"color": color,
-		},
-	}).Result()
-	return err
+	// Publish the update instead of adding to stream
+	message := map[string]interface{}{
+		"x":     strconv.Itoa(x),
+		"y":     strconv.Itoa(y),
+		"color": strconv.Itoa(color),
+	}
+
+	return Client.Publish(context.Background(), CHANNEL_NAME, message).Err()
 }
 
 func StartKeyListener(broadcastFunc func(types.ServerUpdatePacket)) {
-	// Start from the beginning of the stream
-	lastID := "0"
+	pubsub := Client.Subscribe(context.Background(), CHANNEL_NAME)
+	defer pubsub.Close()
 
-	for {
-		// Read new messages from the stream
-		messages, err := Client.XRead(context.Background(), &redis.XReadArgs{
-			Streams: []string{STREAM_KEY, lastID},
-			Count:   100,
-			Block:   0,
-		}).Result()
-		if err != nil {
-			log.Println("Error reading from stream:", err)
+	// Listen for messages
+	ch := pubsub.Channel()
+	for msg := range ch {
+		var update map[string]string
+		if err := json.Unmarshal([]byte(msg.Payload), &update); err != nil {
+			log.Println("Error unmarshaling message:", err)
 			continue
 		}
 
-		for _, message := range messages[0].Messages {
-			// Update the last ID
-			lastID = message.ID
+		// Extract the update data
+		x, _ := strconv.Atoi(update["x"])
+		y, _ := strconv.Atoi(update["y"])
+		color, _ := strconv.Atoi(update["color"])
 
-			// Extract the update data
-			x, _ := strconv.Atoi(message.Values["x"].(string))
-			y, _ := strconv.Atoi(message.Values["y"].(string))
-			color, _ := strconv.Atoi(message.Values["color"].(string))
-
-			// Broadcast the update
-			update := types.ServerUpdatePacket{
-				Type: "LIVE_UPDATE",
-				Data: []types.Pixel{{X: x, Y: y, Color: color}},
-			}
-			broadcastFunc(update)
+		// Broadcast the update
+		updatePacket := types.ServerUpdatePacket{
+			Type: "LIVE_UPDATE",
+			Data: []types.Pixel{{X: x, Y: y, Color: color}},
 		}
+		broadcastFunc(updatePacket)
 	}
 }
 

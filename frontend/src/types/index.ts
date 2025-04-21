@@ -10,7 +10,12 @@ export interface BatchUpdate {
     grid: number[][];
 }
 
-export interface WebSocketUpdate {
-    type: 'PIXEL_UPDATE' | 'BATCH_UPDATE';
-    data: Pixel[]  | BatchUpdate;
+export interface ServerUpdatePacket {
+    type: 'LIVE_UPDATE' | 'BATCH_UPDATE';
+    data: Pixel[] | BatchUpdate;
+}
+
+export interface ClientUpdatePacket {
+    type: 'UPDATE';
+    data: Pixel;
 } 

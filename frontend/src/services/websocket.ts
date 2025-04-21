@@ -1,16 +1,57 @@
-import { WebSocketUpdate, Pixel } from '../types';
-import { COLORS } from '../constants/colors';
-import { GRID_CONSTANTS } from '../constants/grid';
+import { ServerUpdatePacket, ClientUpdatePacket, Pixel } from '../types';
 
-type WebSocketHandler = (update: WebSocketUpdate) => void;
+type WebSocketHandler = (update: ServerUpdatePacket) => void;
 
 export class GridWebSocketService {
+    private ws: WebSocket | null = null;
     private updateHandler: WebSocketHandler | null = null;
-    private pixelInterval: ReturnType<typeof setInterval> | null = null;
-    private batchInterval: ReturnType<typeof setInterval> | null = null;
+    private reconnectAttempts = 0;
+    private maxReconnectAttempts = 5;
+    private reconnectDelay = 1000;
 
     constructor() {
-        this.setupMockUpdates();
+        this.connect();
+    }
+
+    private connect() {
+        this.ws = new WebSocket('ws://localhost:8080/ws');
+
+        this.ws.onopen = () => {
+            console.log('WebSocket connected');
+            this.reconnectAttempts = 0;
+        };
+
+        this.ws.onmessage = (event) => {
+            if (!this.updateHandler) return;
+            
+            try {
+                const update = JSON.parse(event.data) as ServerUpdatePacket;
+                this.updateHandler(update);
+            } catch (error) {
+                console.error('Error parsing WebSocket message:', error);
+            }
+        };
+
+        this.ws.onclose = () => {
+            console.log('WebSocket disconnected');
+            this.handleReconnect();
+        };
+
+        this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+    }
+
+    private handleReconnect() {
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            setTimeout(() => {
+                console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+                this.connect();
+            }, this.reconnectDelay * this.reconnectAttempts);
+        } else {
+            console.error('Max reconnection attempts reached');
+        }
     }
 
     public subscribe(handler: WebSocketHandler) {
@@ -23,68 +64,23 @@ export class GridWebSocketService {
     }
 
     public setUserPixel(pixel: Pixel) {
-        if (!this.updateHandler) return;
-        this.updateHandler({
-            type: 'PIXEL_UPDATE',
-            data: [pixel]
-        });
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            console.error('WebSocket is not connected');
+            return;
+        }
+
+        const packet: ClientUpdatePacket = {
+            type: 'UPDATE',
+            data: pixel
+        };
+
+        this.ws.send(JSON.stringify(packet));
     }
 
     private cleanup() {
-        if (this.pixelInterval) {
-            clearInterval(this.pixelInterval);
-            this.pixelInterval = null;
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
         }
-        if (this.batchInterval) {
-            clearInterval(this.batchInterval);
-            this.batchInterval = null;
-        }
-    }
-
-    private setupMockUpdates() {
-        // Regular single pixel updates
-        this.pixelInterval = setInterval(() => {
-            if (!this.updateHandler) return;
-
-            // Generate multiple pixels at once
-            const numPixels = Math.floor(Math.random() * 30) + 15; // 15-44 pixels per update
-            const pixels: Pixel[] = [];
-            
-            for (let i = 0; i < numPixels; i++) {
-                const x = Math.floor(Math.random() * GRID_CONSTANTS.SIZE);
-                const y = Math.floor(Math.random() * GRID_CONSTANTS.SIZE);
-                const color = Object.values(COLORS)[Math.floor(Math.random() * Object.values(COLORS).length)];
-                pixels.push({ x, y, color });
-            }
-
-            this.updateHandler({
-                type: 'PIXEL_UPDATE',
-                data: pixels
-            });
-        }, 500);
-
-        // Batch updates
-        this.batchInterval = setInterval(() => {
-            if (!this.updateHandler) return;
-
-            const size = Math.floor(Math.random() * 90) + 60; // 60-149 size
-            const startX = Math.floor(Math.random() * (GRID_CONSTANTS.SIZE - size));
-            const startY = Math.floor(Math.random() * (GRID_CONSTANTS.SIZE - size));
-
-            const batchGrid = Array(size).fill(null).map(() =>
-                Array(size).fill(null).map(() => {
-                    if (Math.random() > 0.5) {
-                        return Object.values(COLORS)[Math.floor(Math.random() * Object.values(COLORS).length)];
-                    } else {
-                        return COLORS.WHITE;
-                    }
-                })
-            );
-
-            this.updateHandler({
-                type: 'BATCH_UPDATE',
-                data: { startX, startY, grid: batchGrid }
-            });
-        }, 1500);
     }
 } 

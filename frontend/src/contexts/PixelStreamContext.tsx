@@ -1,5 +1,5 @@
 import { createContext, useContext, useCallback, useRef, useEffect, ReactNode } from 'react';
-import { Pixel, WebSocketUpdate, BatchUpdate } from '../types';
+import { Pixel, ServerUpdatePacket, BatchUpdate } from '../types';
 import { GridWebSocketService } from '../services/websocket';
 
 interface PixelStreamContextType {
@@ -15,8 +15,8 @@ export function PixelStreamProvider({ children }: { children: ReactNode }) {
     const wsService = useRef<GridWebSocketService | null>(null);
 
     // Handle WebSocket updates
-    const handleWebSocketMessage = useCallback((update: WebSocketUpdate) => {
-        if (update.type === 'PIXEL_UPDATE') {
+    const handleWebSocketMessage = useCallback((update: ServerUpdatePacket) => {
+        if (update.type === 'LIVE_UPDATE') {
             const pixels = update.data as Pixel[];
             subscribers.current.forEach(callback => callback(pixels));
         } else if (update.type === 'BATCH_UPDATE') {
