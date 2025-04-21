@@ -1,4 +1,4 @@
-module pixels/backend
+module pixels
 
 go 1.21
 
