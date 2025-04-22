@@ -2,10 +2,9 @@ package broadcast
 
 import (
 	"log"
+	"pixels/internal/types"
 	"sync"
 	"time"
-
-	"pixels/internal/types"
 
 	"github.com/gorilla/websocket"
 )

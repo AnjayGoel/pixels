@@ -41,7 +41,7 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
         if (!canvas) return;
 
         // Add new pixels to pending list
-        pendingPixelsRef.current.push(...pixels);
+        pendingPixelsRef.current = [...pendingPixelsRef.current, ...pixels];
 
         // Clear existing timeout
         if (renderTimeoutRef.current) {

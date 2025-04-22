@@ -28,7 +28,6 @@ func HandleWebSocket(hub *broadcast.Hub, w http.ResponseWriter, r *http.Request)
 	defer conn.Close()
 
 	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 
 	conn.SetPingHandler(func(string) error {
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))

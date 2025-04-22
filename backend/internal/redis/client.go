@@ -5,9 +5,8 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"strings"
-
 	"pixels/internal/types"
+	"strings"
 
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
@@ -43,7 +42,7 @@ func init() {
 	}
 	if exists == 0 {
 		// Create empty grid filled with 'a's (color 0)
-		emptyGrid := strings.Repeat("b", types.GRID_WIDTH*types.GRID_HEIGHT)
+		emptyGrid := strings.Repeat("a", types.GRID_WIDTH*types.GRID_HEIGHT)
 		Client.Set(context.Background(), types.GRID_KEY, emptyGrid, 0)
 	}
 }
