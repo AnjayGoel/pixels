@@ -3,6 +3,7 @@ package broadcast
 import (
 	"log"
 	"sync"
+	"time"
 
 	"pixels/internal/types"
 
@@ -25,11 +26,16 @@ func (h *Hub) Broadcast(update types.ServerUpdatePacket) {
 	defer h.mu.RUnlock()
 
 	for conn := range h.conns {
-		if err := conn.WriteJSON(update); err != nil {
-			log.Println("Failed to broadcast update:", err)
-			conn.Close()
-			delete(h.conns, conn)
-		}
+		go func(c *websocket.Conn) {
+			c.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.WriteJSON(update); err != nil {
+				log.Printf("Failed to broadcast update: %v", err)
+				h.mu.Lock()
+				delete(h.conns, c)
+				h.mu.Unlock()
+				c.Close()
+			}
+		}(conn)
 	}
 }
 

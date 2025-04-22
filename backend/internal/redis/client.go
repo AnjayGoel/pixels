@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 
 	"pixels/internal/types"
@@ -34,7 +33,7 @@ func init() {
 	// Test Redis connection
 	_, err := Client.Ping(context.Background()).Result()
 	if err != nil {
-		log.Fatal("Failed to connect to Redis:", err)
+		log.Fatal("Failed to connect to Redis: ", err)
 	}
 
 	// Initialize grid if it doesn't exist
@@ -74,37 +73,38 @@ func UpdatePixel(x, y, color int) error {
 	}
 
 	// Publish the update instead of adding to stream
-	message := map[string]interface{}{
-		"x":     strconv.Itoa(x),
-		"y":     strconv.Itoa(y),
-		"color": strconv.Itoa(color),
+	pixel := types.Pixel{
+		X:     x,
+		Y:     y,
+		Color: color,
 	}
 
-	return Client.Publish(context.Background(), CHANNEL_NAME, message).Err()
+	// Marshal the pixel to JSON
+	messageBytes, err := json.Marshal(pixel)
+	if err != nil {
+		return err
+	}
+
+	return Client.Publish(context.Background(), CHANNEL_NAME, messageBytes).Err()
 }
 
-func StartKeyListener(broadcastFunc func(types.ServerUpdatePacket)) {
+func StartPixelUpdateListener(broadcastFunc func(types.ServerUpdatePacket)) {
 	pubsub := Client.Subscribe(context.Background(), CHANNEL_NAME)
 	defer pubsub.Close()
 
 	// Listen for messages
 	ch := pubsub.Channel()
 	for msg := range ch {
-		var update map[string]string
-		if err := json.Unmarshal([]byte(msg.Payload), &update); err != nil {
+		var pixel types.Pixel
+		if err := json.Unmarshal([]byte(msg.Payload), &pixel); err != nil {
 			log.Println("Error unmarshaling message:", err)
 			continue
 		}
 
-		// Extract the update data
-		x, _ := strconv.Atoi(update["x"])
-		y, _ := strconv.Atoi(update["y"])
-		color, _ := strconv.Atoi(update["color"])
-
 		// Broadcast the update
 		updatePacket := types.ServerUpdatePacket{
 			Type: "LIVE_UPDATE",
-			Data: []types.Pixel{{X: x, Y: y, Color: color}},
+			Data: []types.Pixel{pixel},
 		}
 		broadcastFunc(updatePacket)
 	}

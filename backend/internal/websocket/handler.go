@@ -3,6 +3,7 @@ package websocket
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"pixels/internal/broadcast"
 	"pixels/internal/redis"
@@ -15,6 +16,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
+	HandshakeTimeout: 10 * time.Second,
 }
 
 func HandleWebSocket(hub *broadcast.Hub, w http.ResponseWriter, r *http.Request) {
@@ -25,11 +27,17 @@ func HandleWebSocket(hub *broadcast.Hub, w http.ResponseWriter, r *http.Request)
 	}
 	defer conn.Close()
 
-	// Add connection to the list
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+
+	conn.SetPingHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
 	hub.AddConnection(conn)
 	defer hub.RemoveConnection(conn)
 
-	// Send initial grid state
 	grid, err := redis.GetGrid()
 	if err != nil {
 		log.Println("Failed to get grid state:", err)
@@ -49,11 +57,34 @@ func HandleWebSocket(hub *broadcast.Hub, w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Handle incoming messages
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	done := make(chan struct{})
+	defer close(done)
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(10*time.Second)); err != nil {
+					log.Printf("ping error: %v", err)
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+
 	for {
+		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+
 		var packet types.ClientUpdatePacket
 		if err := conn.ReadJSON(&packet); err != nil {
-			log.Println("Failed to read message:", err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("error reading message: %v", err)
+			}
 			break
 		}
 

@@ -17,7 +17,7 @@ func main() {
 	hub := broadcast.NewHub()
 
 	// Start key listener in a separate goroutine
-	go redis.StartKeyListener(hub.Broadcast)
+	go redis.StartPixelUpdateListener(hub.Broadcast)
 
 	// Set up WebSocket handler
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
