@@ -2,10 +2,10 @@ import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { Pixel } from '../types';
 import { COLOR_HEX_MAP } from '../constants/colors';
 import { GRID_CONSTANTS } from '../constants/grid';
-import { fetchConfig, Config } from '../services/config';
 import { ZoomControls } from './ZoomControls';
 import { MiniMap } from './MiniMap';
 import { usePixelStream } from '../contexts/PixelStreamContext';
+import { useConfig } from '../contexts/ConfigContext';
 
 interface GridProps {
     selectedColor: number | null;
@@ -13,28 +13,17 @@ interface GridProps {
     onPixelPlace?: () => void;
 }
 
-const DEFAULT_CONFIG: Config = {
-    gridWidth: 0,
-    gridHeight: 0,
-    pixelCooldown: 0,
-    colorMap: {}
-};
-
 export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlace }) => {
-    const [config, setConfig] = useState<Config | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const lastUpdateTimeRef = useRef<number>(0);
     const pendingPixelsRef = useRef<Pixel[]>([]);
     const renderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const { placePixel } = usePixelStream();
     const [scale, setScale] = useState(1);
-    const [position, setPosition] = useState({ x: 0, y: 0 });
-    
-    useEffect(() => {
-        fetchConfig().then(setConfig);
-    }, []);
-    
-    const { gridWidth, gridHeight, colorMap } = config || DEFAULT_CONFIG;
+    const [position, setPosition] = useState({ x: 0, y: 0 });    
+    const config = useConfig();
+
+    const { gridWidth, gridHeight, colorMap } = config;
     const { PIXEL_SIZE, MIN_SCALE, MAX_SCALE, UPDATE_THROTTLE } = GRID_CONSTANTS;
 
     // Update position based on config

@@ -1,8 +1,8 @@
 import { Stage, Layer, Rect } from 'react-konva';
-import { GRID_CONSTANTS } from '../constants/grid';
 import { Paper } from '@mui/material';
 import { useRef, useEffect, useCallback, useState } from 'react';
 import Konva from 'konva';
+import { useConfig } from '../contexts/ConfigContext';
 
 interface MiniMapProps {
     viewportBounds: {
@@ -18,9 +18,9 @@ export const MiniMap: React.FC<MiniMapProps> = ({
     viewportBounds,
     onViewportChange,
 }) => {
-    const { SIZE: GRID_SIZE } = GRID_CONSTANTS;
+    const config = useConfig()
     const MINI_MAP_SIZE = 150;
-    const MINI_PIXEL_SIZE = MINI_MAP_SIZE / GRID_SIZE;
+    const MINI_PIXEL_SIZE = MINI_MAP_SIZE / config.gridWidth;
     const UPDATE_THROTTLE = 16;
     const lastUpdateTimeRef = useRef<number>(0);
     const [isDragging, setIsDragging] = useState(false);
@@ -45,11 +45,11 @@ export const MiniMap: React.FC<MiniMapProps> = ({
         const stage = e.target.getStage();
         const point = stage.getPointerPosition();
 
-        const x = (point.x / MINI_MAP_SIZE) * GRID_SIZE;
-        const y = (point.y / MINI_MAP_SIZE) * GRID_SIZE;
+        const x = (point.x / MINI_MAP_SIZE) * config.gridWidth;
+        const y = (point.y / MINI_MAP_SIZE) * config.gridHeight;
 
         onViewportChange(x, y);
-    }, [onViewportChange, GRID_SIZE]);
+    }, [onViewportChange]);
 
     const handleViewportDragStart = useCallback(() => {
         setIsDragging(true);

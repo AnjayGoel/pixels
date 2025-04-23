@@ -5,6 +5,7 @@ import { ColorPicker } from './components/ColorPicker'
 import { COLORS } from './constants/colors'
 import { Snackbar, Alert } from '@mui/material'
 import { PixelStreamProvider } from './contexts/PixelStreamContext'
+import { ConfigProvider } from './contexts/ConfigContext'
 
 function App() {
   const [selectedColor, setSelectedColor] = useState<number | null>(COLORS.BLACK)
@@ -28,6 +29,7 @@ function App() {
   }, [])
 
   return (
+    <ConfigProvider>
     <PixelStreamProvider>
       <div className="min-h-screen bg-gray-200">
         <Snackbar 
@@ -50,6 +52,7 @@ function App() {
         />
       </div>
     </PixelStreamProvider>
+    </ConfigProvider>
   )
 }
 
