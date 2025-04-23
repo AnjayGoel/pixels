@@ -18,6 +18,8 @@ const (
 
 var Client *redis.Client
 
+var config types.Config = types.DefaultConfig()
+
 func init() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found")
@@ -42,7 +44,7 @@ func init() {
 	}
 	if exists == 0 {
 		// Create empty grid filled with 'a's (color 0)
-		emptyGrid := strings.Repeat("a", types.GRID_WIDTH*types.GRID_HEIGHT)
+		emptyGrid := strings.Repeat("a", config.GridWidth*config.GridHeight)
 		Client.Set(context.Background(), types.GRID_KEY, emptyGrid, 0)
 	}
 }
@@ -58,7 +60,7 @@ func CharToColor(char byte) int {
 }
 
 func GetGridIndex(x, y int) int {
-	return y*types.GRID_WIDTH + x
+	return y*config.GridWidth + x
 }
 
 func UpdatePixel(x, y, color int) error {
@@ -115,10 +117,10 @@ func GetGrid() ([][]int, error) {
 		return nil, err
 	}
 
-	grid := make([][]int, types.GRID_HEIGHT)
-	for y := 0; y < types.GRID_HEIGHT; y++ {
-		grid[y] = make([]int, types.GRID_WIDTH)
-		for x := 0; x < types.GRID_WIDTH; x++ {
+	grid := make([][]int, config.GridHeight)
+	for y := 0; y < config.GridHeight; y++ {
+		grid[y] = make([]int, config.GridWidth)
+		for x := 0; x < config.GridWidth; x++ {
 			index := GetGridIndex(x, y)
 			color := CharToColor(gridStr[index])
 			grid[y][x] = color

@@ -2,6 +2,7 @@ import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { Pixel } from '../types';
 import { COLOR_HEX_MAP } from '../constants/colors';
 import { GRID_CONSTANTS } from '../constants/grid';
+import { fetchConfig, Config } from '../services/config';
 import { ZoomControls } from './ZoomControls';
 import { MiniMap } from './MiniMap';
 import { usePixelStream } from '../contexts/PixelStreamContext';
@@ -12,20 +13,39 @@ interface GridProps {
     onPixelPlace?: () => void;
 }
 
+const DEFAULT_CONFIG: Config = {
+    gridWidth: 0,
+    gridHeight: 0,
+    pixelCooldown: 0,
+    colorMap: {}
+};
+
 export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlace }) => {
-    const { SIZE: GRID_SIZE, PIXEL_SIZE, MIN_SCALE, MAX_SCALE, UPDATE_THROTTLE } = GRID_CONSTANTS;
-    
+    const [config, setConfig] = useState<Config | null>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const lastUpdateTimeRef = useRef<number>(0);
     const pendingPixelsRef = useRef<Pixel[]>([]);
     const renderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const { placePixel } = usePixelStream();
-
     const [scale, setScale] = useState(1);
-    const [position, setPosition] = useState({
-        x: window.innerWidth / 2 - (GRID_SIZE * PIXEL_SIZE) / 2,
-        y: window.innerHeight / 2 - (GRID_SIZE * PIXEL_SIZE) / 2
-    });
+    const [position, setPosition] = useState({ x: 0, y: 0 });
+    
+    useEffect(() => {
+        fetchConfig().then(setConfig);
+    }, []);
+    
+    const { gridWidth, gridHeight, colorMap } = config || DEFAULT_CONFIG;
+    const { PIXEL_SIZE, MIN_SCALE, MAX_SCALE, UPDATE_THROTTLE } = GRID_CONSTANTS;
+
+    // Update position based on config
+    useEffect(() => {
+        if (config) {
+            setPosition({
+                x: window.innerWidth / 2 - (gridWidth * PIXEL_SIZE) / 2,
+                y: window.innerHeight / 2 - (gridHeight * PIXEL_SIZE) / 2
+            });
+        }
+    }, [config, gridWidth, gridHeight, PIXEL_SIZE]);
 
     const updatePosition = useCallback((newPosition: { x: number; y: number }) => {
         setPosition(newPosition);
@@ -58,7 +78,7 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
 
             // Process all pending pixels
             for (const pixel of copy) {
-                ctx.fillStyle = COLOR_HEX_MAP[pixel.color];
+                ctx.fillStyle = colorMap[pixel.color];
                 ctx.fillRect(
                     pixel.x * PIXEL_SIZE,
                     pixel.y * PIXEL_SIZE,
@@ -69,12 +89,12 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
 
             // Redraw grid boundary
             ctx.beginPath();
-            ctx.rect(0, 0, GRID_SIZE * PIXEL_SIZE, GRID_SIZE * PIXEL_SIZE);
+            ctx.rect(0, 0, gridWidth * PIXEL_SIZE, gridHeight * PIXEL_SIZE);
             ctx.strokeStyle = 'black';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 5;
             ctx.stroke();
         }, 16); // ~60fps
-    }, [PIXEL_SIZE, GRID_SIZE]);
+    }, [gridWidth, gridHeight, colorMap]);
 
     // Subscribe to pixel stream
     const { subscribe, unsubscribe } = usePixelStream();
@@ -143,10 +163,10 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
         const gridX = Math.floor((e.clientX / scale - position.x / scale) / PIXEL_SIZE);
         const gridY = Math.floor((e.clientY / scale - position.y / scale) / PIXEL_SIZE);
         
-        if (gridX >= 0 && gridX < GRID_SIZE && gridY >= 0 && gridY < GRID_SIZE) {
+        if (gridX >= 0 && gridX < gridWidth && gridY >= 0 && gridY < gridHeight) {
             handlePixelPlace(gridX, gridY);
         }
-    }, [disabled, scale, position, PIXEL_SIZE, GRID_SIZE, handlePixelPlace]);
+    }, [disabled, scale, position, PIXEL_SIZE, gridWidth, gridHeight, handlePixelPlace]);
 
     // Handle drag events
     const isDragging = useRef(false);
@@ -255,10 +275,10 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
         return {
             x: Math.max(0, visibleX),
             y: Math.max(0, visibleY),
-            width: Math.min(GRID_SIZE - visibleX, visibleWidth),
-            height: Math.min(GRID_SIZE - visibleY, visibleHeight),
+            width: Math.min(gridWidth - visibleX, visibleWidth),
+            height: Math.min(gridHeight - visibleY, visibleHeight),
         };
-    }, [position, scale, PIXEL_SIZE, GRID_SIZE]);
+    }, [position, scale, PIXEL_SIZE, gridWidth, gridHeight]);
 
     // Set up event listeners
     useEffect(() => {
@@ -269,7 +289,7 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
         const ctx = canvas.getContext('2d');
         if (ctx) {
             ctx.beginPath();
-            ctx.rect(0, 0, GRID_SIZE * PIXEL_SIZE, GRID_SIZE * PIXEL_SIZE);
+            ctx.rect(0, 0, gridWidth * PIXEL_SIZE, gridHeight * PIXEL_SIZE);
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 1;
             ctx.stroke();
@@ -294,7 +314,7 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
             canvas.removeEventListener('touchmove', handleTouchMove);
             canvas.removeEventListener('touchend', handleTouchEnd);
         };
-    }, [handleWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleClick, handleTouchStart, handleTouchMove, handleTouchEnd, GRID_SIZE, PIXEL_SIZE]);
+    }, [handleWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleClick, handleTouchStart, handleTouchMove, handleTouchEnd, gridWidth, gridHeight, PIXEL_SIZE]);
 
     // Set cursor style
     useEffect(() => {
@@ -304,6 +324,10 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
             document.body.style.cursor = 'default';
         }
     }, [selectedColor]);
+
+    if (!config) {
+        return null;
+    }
 
     return (
         <>
@@ -321,8 +345,8 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
             >
                 <canvas
                     ref={canvasRef}
-                    width={GRID_SIZE * PIXEL_SIZE}
-                    height={GRID_SIZE * PIXEL_SIZE}
+                    width={gridWidth * PIXEL_SIZE}
+                    height={gridHeight * PIXEL_SIZE}
                     style={{
                         position: 'absolute',
                         transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,

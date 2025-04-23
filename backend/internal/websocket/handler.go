@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
@@ -17,6 +18,21 @@ var upgrader = websocket.Upgrader{
 		return true
 	},
 	HandshakeTimeout: 10 * time.Second,
+}
+
+// ServeConfig serves the current configuration
+func ServeConfig(w http.ResponseWriter, r *http.Request) {
+	config := types.DefaultConfig()
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+
+	if r.Method == "OPTIONS" {
+		return
+	}
+
+	json.NewEncoder(w).Encode(config)
 }
 
 func HandleWebSocket(hub *broadcast.Hub, w http.ResponseWriter, r *http.Request) {
@@ -76,6 +92,8 @@ func HandleWebSocket(hub *broadcast.Hub, w http.ResponseWriter, r *http.Request)
 		}
 	}()
 
+	config := types.DefaultConfig()
+
 	for {
 		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 
@@ -89,7 +107,7 @@ func HandleWebSocket(hub *broadcast.Hub, w http.ResponseWriter, r *http.Request)
 
 		if packet.Type == "UPDATE" {
 			pixel := packet.Data
-			if pixel.X >= 0 && pixel.X < types.GRID_WIDTH && pixel.Y >= 0 && pixel.Y < types.GRID_HEIGHT {
+			if pixel.X >= 0 && pixel.X < config.GridWidth && pixel.Y >= 0 && pixel.Y < config.GridHeight {
 				if err := redis.UpdatePixel(pixel.X, pixel.Y, pixel.Color); err != nil {
 					log.Println("Failed to update pixel:", err)
 					continue

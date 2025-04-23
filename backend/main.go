@@ -24,6 +24,9 @@ func main() {
 		websocket.HandleWebSocket(hub, w, r)
 	})
 
+	// Set up config endpoint
+	http.HandleFunc("/api/config", websocket.ServeConfig)
+
 	log.Println("Server starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
