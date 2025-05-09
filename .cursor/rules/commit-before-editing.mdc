@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Commit Before Modifying or Generating Code
+
+Before making any modifications or generating new code, ensure that all current changes are committed to version control. This helps maintain a clean project history and makes it easier to track new changes.
+
+**Workflow:**
+1. Review your working directory for uncommitted changes.
+2. Stage and commit all changes with a descriptive message.
+3. Proceed with code modifications or generation only after confirming a clean working state.
+
+This rule applies to all contributors and automated tools.

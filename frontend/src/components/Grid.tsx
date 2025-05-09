@@ -25,6 +25,7 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
 
     const { gridWidth, gridHeight, colorMap } = config;
     const { PIXEL_SIZE, MIN_SCALE, MAX_SCALE, UPDATE_THROTTLE } = GRID_CONSTANTS;
+    const BOUNDARY_WIDTH = 2;
 
     // Update position based on config
     useEffect(() => {
@@ -69,8 +70,8 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
             for (const pixel of copy) {
                 ctx.fillStyle = colorMap[pixel.color];
                 ctx.fillRect(
-                    pixel.x * PIXEL_SIZE,
-                    pixel.y * PIXEL_SIZE,
+                    pixel.x * PIXEL_SIZE + BOUNDARY_WIDTH,
+                    pixel.y * PIXEL_SIZE + BOUNDARY_WIDTH,
                     PIXEL_SIZE,
                     PIXEL_SIZE
                 );
@@ -78,12 +79,12 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
 
             // Redraw grid boundary
             ctx.beginPath();
-            ctx.rect(0, 0, gridWidth * PIXEL_SIZE, gridHeight * PIXEL_SIZE);
+            ctx.rect(BOUNDARY_WIDTH/2, BOUNDARY_WIDTH/2, gridWidth * PIXEL_SIZE + BOUNDARY_WIDTH, gridHeight * PIXEL_SIZE + BOUNDARY_WIDTH);
             ctx.strokeStyle = 'black';
-            ctx.lineWidth = 5;
+            ctx.lineWidth = BOUNDARY_WIDTH;
             ctx.stroke();
         }, 16); // ~60fps
-    }, [gridWidth, gridHeight, colorMap]);
+    }, [gridWidth, gridHeight, colorMap, PIXEL_SIZE]);
 
     // Subscribe to pixel stream
     const { subscribe, unsubscribe } = usePixelStream();
@@ -278,9 +279,9 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
         const ctx = canvas.getContext('2d');
         if (ctx) {
             ctx.beginPath();
-            ctx.rect(0, 0, gridWidth * PIXEL_SIZE, gridHeight * PIXEL_SIZE);
+            ctx.rect(BOUNDARY_WIDTH/2, BOUNDARY_WIDTH/2, gridWidth * PIXEL_SIZE + BOUNDARY_WIDTH, gridHeight * PIXEL_SIZE + BOUNDARY_WIDTH);
             ctx.strokeStyle = 'black';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = BOUNDARY_WIDTH;
             ctx.stroke();
         }
 
@@ -334,8 +335,8 @@ export const Grid: React.FC<GridProps> = ({ selectedColor, disabled, onPixelPlac
             >
                 <canvas
                     ref={canvasRef}
-                    width={gridWidth * PIXEL_SIZE}
-                    height={gridHeight * PIXEL_SIZE}
+                    width={gridWidth * PIXEL_SIZE + BOUNDARY_WIDTH * 2}
+                    height={gridHeight * PIXEL_SIZE + BOUNDARY_WIDTH * 2}
                     style={{
                         position: 'absolute',
                         transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,

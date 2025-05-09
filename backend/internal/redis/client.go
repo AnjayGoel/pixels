@@ -7,6 +7,7 @@ import (
 	"os"
 	"pixels/internal/types"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
@@ -93,21 +94,34 @@ func StartPixelUpdateListener(broadcastFunc func(types.ServerUpdatePacket)) {
 	pubsub := Client.Subscribe(context.Background(), CHANNEL_NAME)
 	defer pubsub.Close()
 
-	// Listen for messages
 	ch := pubsub.Channel()
-	for msg := range ch {
-		var pixel types.Pixel
-		if err := json.Unmarshal([]byte(msg.Payload), &pixel); err != nil {
-			log.Println("Error unmarshaling message:", err)
-			continue
-		}
 
-		// Broadcast the update
-		updatePacket := types.ServerUpdatePacket{
-			Type: "LIVE_UPDATE",
-			Data: []types.Pixel{pixel},
+	batch := make([]types.Pixel, 0)
+	ticker := time.NewTicker(time.Millisecond * 250)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+			var pixel types.Pixel
+			if err := json.Unmarshal([]byte(msg.Payload), &pixel); err != nil {
+				log.Println("Error unmarshaling message:", err)
+				continue
+			}
+			batch = append(batch, pixel)
+		case <-ticker.C:
+			if len(batch) > 0 {
+				updatePacket := types.ServerUpdatePacket{
+					Type: "LIVE_UPDATE",
+					Data: batch,
+				}
+				broadcastFunc(updatePacket)
+				batch = make([]types.Pixel, 0)
+			}
 		}
-		broadcastFunc(updatePacket)
 	}
 }
 

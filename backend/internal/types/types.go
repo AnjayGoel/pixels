@@ -10,8 +10,8 @@ type Config struct {
 // DefaultConfig returns the default configuration
 func DefaultConfig() Config {
 	return Config{
-		GridWidth:     500,
-		GridHeight:    500,
+		GridWidth:     100,
+		GridHeight:    100,
 		PixelCooldown: 3000,
 		ColorMap: map[int]string{
 			0:  "#FFFFFF", // White
